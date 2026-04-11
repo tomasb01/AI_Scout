@@ -577,10 +577,18 @@ def _build_recommendations(
 
 
 def _extract_tech_stack(asset: AIAsset) -> list[str]:
-    """Extract all technologies used in this solution."""
+    """Extract all technologies used in this solution.
+
+    Sources (in priority order):
+    1. Provider profiles from raw_findings
+    2. LLM model names from code_contexts (e.g. "gpt-4o", "claude-3-sonnet")
+    3. Dependencies (AI packages + infrastructure)
+    4. API call targets from code_contexts
+    5. Framework/tool detection from code text
+    """
     stack = set()
 
-    # From providers found in findings
+    # ── 1. Providers from findings ──
     providers_seen = set()
     for f in asset.raw_findings:
         if f.provider:
@@ -590,51 +598,289 @@ def _extract_tech_stack(asset: AIAsset) -> list[str]:
         if profile.name != "unknown":
             stack.add(profile.display_name)
 
-    # From dependencies
+    # ── 2. LLM model names from code analysis ──
+    for ctx in asset.code_contexts:
+        for model_name in ctx.model_names:
+            display = _model_name_to_display(model_name)
+            if display:
+                stack.add(display)
+
+    # ── 3. Dependencies ──
     for dep in asset.dependencies:
         pkg = dep.split(">=")[0].split("==")[0].split("@")[0].strip().lower()
-        if pkg in ("flask", "fastapi", "django", "express"):
-            stack.add(pkg.capitalize())
-        elif pkg in ("streamlit",):
-            stack.add("Streamlit")
-        elif pkg in ("gradio",):
-            stack.add("Gradio")
-        elif "psycopg" in pkg or "sqlalchemy" in pkg:
-            stack.add("PostgreSQL")
-        elif "pymongo" in pkg:
-            stack.add("MongoDB")
-        elif "redis" in pkg:
-            stack.add("Redis")
+        # Infrastructure / web frameworks
+        dep_display = _DEP_TO_TECH.get(pkg)
+        if dep_display:
+            stack.add(dep_display)
+        # AI packages — resolve via provider profile if not already in stack
+        elif pkg in _AI_DEP_TO_PROVIDER:
+            provider_name = _AI_DEP_TO_PROVIDER[pkg]
+            profile = get_provider(provider_name)
+            if profile.name != "unknown":
+                stack.add(profile.display_name)
 
-    # From code context — detect frameworks from imports and calls
+    # ── 4. API call targets from code contexts ──
+    for ctx in asset.code_contexts:
+        for call in ctx.api_calls:
+            target = call.get("target", "").lower()
+            args = call.get("args_preview", "").lower()
+            # Detect specific services from API call patterns
+            if "embedding" in target:
+                stack.add("Embeddings")
+            if "transcri" in target or "whisper" in target:
+                stack.add("Speech-to-Text")
+            if "image" in target or "dall" in target:
+                stack.add("Image Generation")
+            # Model names in API call args (e.g. model='gpt-4o' as string in args_preview)
+            if "model=" in args or "model_name=" in args:
+                import re
+                for m in re.finditer(r"model(?:_name)?=['\"]([^'\"]{3,60})['\"]", args):
+                    display = _model_name_to_display(m.group(1))
+                    if display:
+                        stack.add(display)
+
+    # ── 5. Framework/tool detection from code text ──
     all_text = ""
     for ctx in asset.code_contexts:
         for func in ctx.functions:
             all_text += " " + func.get("body_preview", "")
         all_text += " " + " ".join(ctx.env_vars)
+        # Include prompts and data sink targets for broader coverage
+        all_text += " " + " ".join(ctx.prompts[:3])
+        for sink in ctx.data_sinks:
+            all_text += " " + sink.get("detail", "")
 
-    if "flask" in all_text.lower():
-        stack.add("Flask")
-    if "fastapi" in all_text.lower():
-        stack.add("FastAPI")
-    if "streamlit" in all_text.lower():
-        stack.add("Streamlit")
-    if "sqlite" in all_text.lower():
-        stack.add("SQLite")
-    if "postgres" in all_text.lower() or "psycopg" in all_text.lower():
-        stack.add("PostgreSQL")
-    if "tavily" in all_text.lower():
-        stack.add("Tavily Search")
-    if "playwright" in all_text.lower():
-        stack.add("Playwright")
-    if "puppeteer" in all_text.lower():
-        stack.add("Puppeteer")
-    if "docker" in all_text.lower():
-        stack.add("Docker")
-    if "mcp" in all_text.lower():
-        stack.add("MCP")
+    text_lower = all_text.lower()
+    for keyword, tech_name in _CODE_TEXT_TECH_MAP.items():
+        if keyword in text_lower:
+            stack.add(tech_name)
 
-    return sorted(stack)
+    return sorted(_deduplicate_tech_stack(stack))
+
+
+# ── Model name → display name mapping ────────────────────────────────────
+
+_MODEL_FAMILY_MAP = {
+    "gpt-4": "GPT-4",
+    "gpt-4o": "GPT-4o",
+    "gpt-4-turbo": "GPT-4 Turbo",
+    "gpt-3.5": "GPT-3.5",
+    "gpt-3": "GPT-3",
+    "o1": "OpenAI o1",
+    "o3": "OpenAI o3",
+    "o4": "OpenAI o4",
+    "claude-3": "Claude 3",
+    "claude-3.5": "Claude 3.5",
+    "claude-3-5": "Claude 3.5",
+    "claude-4": "Claude 4",
+    "claude-2": "Claude 2",
+    "gemini-1.5": "Gemini 1.5",
+    "gemini-2": "Gemini 2",
+    "gemini-pro": "Gemini Pro",
+    "gemini-flash": "Gemini Flash",
+    "mistral-large": "Mistral Large",
+    "mistral-small": "Mistral Small",
+    "mistral-medium": "Mistral Medium",
+    "codestral": "Codestral",
+    "mixtral": "Mixtral",
+    "llama-3": "Llama 3",
+    "llama-2": "Llama 2",
+    "llama3": "Llama 3",
+    "llama2": "Llama 2",
+    "meta-llama": "Llama",
+    "qwen2": "Qwen 2",
+    "qwen-": "Qwen",
+    "phi-3": "Phi-3",
+    "phi-4": "Phi-4",
+    "phi3": "Phi-3",
+    "deepseek": "DeepSeek",
+    "command-r": "Cohere Command R",
+    "command-light": "Cohere Command",
+    "gemma": "Gemma",
+    "falcon": "Falcon",
+    "whisper": "Whisper",
+    "dall-e": "DALL-E",
+    "dalle": "DALL-E",
+    "tts-1": "OpenAI TTS",
+    "text-embedding": "OpenAI Embeddings",
+    "stable-diffusion": "Stable Diffusion",
+    "sdxl": "Stable Diffusion XL",
+}
+
+
+def _model_name_to_display(model_name: str) -> str:
+    """Convert a raw model name to a human-readable display name.
+
+    'gpt-4o-2024-08-06' → 'GPT-4o'
+    'claude-3-sonnet-20240229' → 'Claude 3'
+    'meta-llama/Meta-Llama-3-8B' → 'Llama 3'
+    """
+    name = model_name.strip().lower()
+    # Try longest prefix match first
+    best_match = ""
+    best_display = ""
+    for prefix, display in _MODEL_FAMILY_MAP.items():
+        if name.startswith(prefix) and len(prefix) > len(best_match):
+            best_match = prefix
+            best_display = display
+    if best_display:
+        return best_display
+
+    # Check if any key appears anywhere in the name (for HuggingFace-style paths)
+    for key, display in _MODEL_FAMILY_MAP.items():
+        if key in name:
+            return display
+
+    return ""
+
+
+# ── Tech stack deduplication ──────────────────────────────────────────────
+
+# When a specific model is present, suppress the generic provider name.
+# "GPT-4o" makes "OpenAI" redundant; "Claude 3" makes "Anthropic (Claude)" redundant.
+_MODEL_SUPPRESSES_PROVIDER = {
+    "OpenAI": {"GPT-3", "GPT-3.5", "GPT-4", "GPT-4o", "GPT-4 Turbo", "OpenAI o1", "OpenAI o3", "OpenAI o4", "DALL-E", "Whisper", "OpenAI TTS", "OpenAI Embeddings"},
+    "Anthropic (Claude)": {"Claude 2", "Claude 3", "Claude 3.5", "Claude 4"},
+    "Google AI (Gemini)": {"Gemini 1.5", "Gemini 2", "Gemini Pro", "Gemini Flash"},
+    "Mistral AI": {"Mistral Large", "Mistral Small", "Mistral Medium", "Codestral", "Mixtral"},
+    "Cohere": {"Cohere Command R", "Cohere Command"},
+}
+
+# More specific version suppresses generic: "Llama 3" suppresses "Llama"
+_SPECIFIC_SUPPRESSES_GENERIC = {
+    "Llama": {"Llama 2", "Llama 3"},
+    "Qwen": {"Qwen 2"},
+    "Phi-3": {"Phi-4"},  # don't suppress — both can coexist; but "Phi-3" doesn't suppress "Phi-4"
+}
+
+
+def _deduplicate_tech_stack(stack: set[str]) -> set[str]:
+    """Remove redundant entries from tech stack.
+
+    Rules:
+    - If a specific model is present, remove the generic provider
+      (e.g. "GPT-4o" present → remove "OpenAI")
+    - If a versioned model is present, remove the unversioned
+      (e.g. "Llama 3" present → remove "Llama")
+    """
+    to_remove = set()
+
+    # Provider suppression by specific models
+    for provider, models in _MODEL_SUPPRESSES_PROVIDER.items():
+        if provider in stack and stack & models:
+            to_remove.add(provider)
+
+    # Generic suppression by specific versions
+    for generic, specifics in _SPECIFIC_SUPPRESSES_GENERIC.items():
+        if generic in stack and stack & specifics:
+            to_remove.add(generic)
+
+    return stack - to_remove
+
+
+# ── Dependency → tech display name ───────────────────────────────────────
+
+_DEP_TO_TECH = {
+    "flask": "Flask",
+    "fastapi": "FastAPI",
+    "django": "Django",
+    "express": "Express",
+    "streamlit": "Streamlit",
+    "gradio": "Gradio",
+    "chainlit": "Chainlit",
+    "panel": "Panel",
+    "psycopg2": "PostgreSQL",
+    "psycopg": "PostgreSQL",
+    "asyncpg": "PostgreSQL",
+    "sqlalchemy": "SQLAlchemy",
+    "pymongo": "MongoDB",
+    "motor": "MongoDB",
+    "redis": "Redis",
+    "celery": "Celery",
+    "aiohttp": "aiohttp",
+    "uvicorn": "Uvicorn",
+    "gunicorn": "Gunicorn",
+    "pydantic": "Pydantic",
+    "scipy": "SciPy",
+    "numpy": "NumPy",
+    "pandas": "Pandas",
+    "unstructured": "Unstructured",
+    "pypdf": "PyPDF",
+    "pymupdf": "PyMuPDF",
+    "beautifulsoup4": "BeautifulSoup",
+    "selenium": "Selenium",
+    "playwright": "Playwright",
+}
+
+_AI_DEP_TO_PROVIDER = {
+    "openai": "openai",
+    "anthropic": "anthropic",
+    "langchain": "langchain",
+    "langchain-core": "langchain",
+    "langchain-community": "langchain",
+    "langchain-openai": "langchain",
+    "langchain-anthropic": "langchain",
+    "llama-index": "llamaindex",
+    "llamaindex": "llamaindex",
+    "transformers": "huggingface",
+    "huggingface-hub": "huggingface",
+    "diffusers": "huggingface",
+    "sentence-transformers": "huggingface",
+    "mistralai": "mistral",
+    "cohere": "cohere",
+    "ollama": "ollama",
+    "replicate": "replicate",
+    "together": "together",
+    "groq": "groq",
+    "fireworks-ai": "fireworks",
+    "chromadb": "chromadb",
+    "pinecone-client": "pinecone",
+    "pinecone": "pinecone",
+    "qdrant-client": "qdrant",
+    "weaviate-client": "weaviate",
+    "faiss-cpu": "faiss",
+    "faiss-gpu": "faiss",
+    "guidance": "guidance",
+    "dspy-ai": "dspy",
+    "instructor": "instructor",
+    "outlines": "outlines",
+    "crewai": "crewai",
+    "autogen": "autogen",
+    "semantic-kernel": "semantic-kernel",
+    "google-generativeai": "google_ai",
+    "google-cloud-aiplatform": "google_ai",
+}
+
+# ── Code text → tech detection ───────────────────────────────────────────
+
+_CODE_TEXT_TECH_MAP = {
+    "flask": "Flask",
+    "fastapi": "FastAPI",
+    "streamlit": "Streamlit",
+    "gradio": "Gradio",
+    "chainlit": "Chainlit",
+    "sqlite": "SQLite",
+    "postgres": "PostgreSQL",
+    "psycopg": "PostgreSQL",
+    "mongodb": "MongoDB",
+    "pymongo": "MongoDB",
+    "redis": "Redis",
+    "tavily": "Tavily Search",
+    "playwright": "Playwright",
+    "puppeteer": "Puppeteer",
+    "selenium": "Selenium",
+    "docker": "Docker",
+    "kubernetes": "Kubernetes",
+    "mcp": "MCP",
+    "supabase": "Supabase",
+    "firebase": "Firebase",
+    "pinecone": "Pinecone",
+    "weaviate": "Weaviate",
+    "qdrant": "Qdrant",
+    "chroma": "ChromaDB",
+    "neo4j": "Neo4j",
+    "elasticsearch": "Elasticsearch",
+}
 
 
 # ── Data involved extraction ──────────────────────────────────────────────

@@ -73,6 +73,59 @@ AI_CALL_PATTERNS = [
     re.compile(r'(openai|anthropic|client|model|chain|agent)\.\w+\.\w+\s*\('),
 ]
 
+# ── LLM Model Name Patterns ──────────────────────────────────────────────
+# Match model="gpt-4o", model_name="claude-3-sonnet", model: "llama-3" etc.
+
+MODEL_NAME_PATTERNS = [
+    re.compile(r'model(?:_?name|_?id)?\s*[:=]\s*["\']([^"\']{3,60})["\']', re.IGNORECASE),
+    re.compile(r'engine\s*[:=]\s*["\']([^"\']{3,60})["\']'),
+]
+
+# Only keep model values that look like real LLM model identifiers
+_KNOWN_MODEL_PREFIXES = (
+    "gpt-", "o1", "o3", "o4",
+    "claude-", "claude3", "claude2",
+    "gemini-", "gemini/",
+    "mistral", "codestral", "pixtral", "ministral",
+    "llama", "meta-llama",
+    "qwen", "phi-", "phi3", "phi4",
+    "command-r", "command-light", "command-nightly",
+    "deepseek",
+    "gemma",
+    "falcon",
+    "mixtral",
+    "stable",
+    "whisper",
+    "dall-e", "dalle",
+    "tts-",
+    "text-embedding", "text-davinci", "text-curie", "text-babbage",
+    "embedding",
+)
+
+_MODEL_NOISE = {
+    "model", "model_name", "model_id", "base", "default", "none",
+    "test", "true", "false", "null", "undefined", "string",
+}
+
+
+def _is_llm_model_name(value: str) -> bool:
+    """Check if a string looks like a real LLM model identifier."""
+    v = value.strip().lower()
+    if v in _MODEL_NOISE:
+        return False
+    if len(v) < 3:
+        return False
+    # Known prefixes
+    if any(v.startswith(p) for p in _KNOWN_MODEL_PREFIXES):
+        return True
+    # Patterns like "org/model-name" (HuggingFace style)
+    if "/" in v and len(v) > 5:
+        return True
+    # Contains version-like suffix: model-7b, model:14b, model-v2
+    if re.search(r'[-:]?\d+[bBmMkK]', v) or re.search(r'-v\d', v):
+        return True
+    return False
+
 
 # ── Public API ─────────────────────────────────────────────────────────────
 
@@ -224,6 +277,9 @@ def _analyze_python(file_path: str, content: str) -> CodeContext:
 
     # Extract prompts from string literals in AST
     _extract_prompts_from_ast(tree, ctx)
+
+    # Extract model names from AST (keyword arguments and assignments)
+    _extract_model_names_from_ast(tree, ctx)
 
     # Regex-based extraction for things AST misses
     _extract_with_regex(content, ctx)
@@ -398,6 +454,46 @@ def _extract_prompts_from_ast(tree: ast.Module, ctx: CodeContext):
                 ctx.prompts.append(text[:500])
 
 
+# ── Model name extraction ────────────────────────────────────────────────
+
+
+def _extract_model_names_from_ast(tree: ast.Module, ctx: CodeContext):
+    """Extract LLM model names from AST — keyword args and variable assignments."""
+    for node in ast.walk(tree):
+        # model="gpt-4o" in function calls
+        if isinstance(node, ast.Call):
+            for kw in node.keywords:
+                if kw.arg in ("model", "model_name", "model_id", "engine", "deployment_name"):
+                    if isinstance(kw.value, ast.Constant) and isinstance(kw.value.value, str):
+                        val = kw.value.value.strip()
+                        if _is_llm_model_name(val) and val not in ctx.model_names:
+                            ctx.model_names.append(val)
+
+        # MODEL_NAME = "gpt-4o" or model = "gpt-4o" assignments
+        if isinstance(node, ast.Assign):
+            for target in node.targets:
+                target_name = ""
+                if isinstance(target, ast.Name):
+                    target_name = target.id.lower()
+                elif isinstance(target, ast.Attribute):
+                    target_name = target.attr.lower()
+
+                if target_name in ("model", "model_name", "model_id", "llm_model", "engine"):
+                    if isinstance(node.value, ast.Constant) and isinstance(node.value.value, str):
+                        val = node.value.value.strip()
+                        if _is_llm_model_name(val) and val not in ctx.model_names:
+                            ctx.model_names.append(val)
+
+
+def _extract_model_names_with_regex(content: str, ctx: CodeContext):
+    """Extract LLM model names using regex (for non-Python or AST fallback)."""
+    for pattern in MODEL_NAME_PATTERNS:
+        for match in pattern.finditer(content):
+            val = match.group(1).strip()
+            if _is_llm_model_name(val) and val not in ctx.model_names:
+                ctx.model_names.append(val)
+
+
 # ── Generic regex analysis ─────────────────────────────────────────────────
 
 
@@ -436,7 +532,10 @@ def _analyze_generic(file_path: str, content: str, language: str) -> CodeContext
 
 
 def _extract_with_regex(content: str, ctx: CodeContext):
-    """Extract prompts, DB ops, HTTP calls, env vars, file I/O using regex."""
+    """Extract prompts, DB ops, HTTP calls, env vars, file I/O, model names using regex."""
+    # Model names
+    _extract_model_names_with_regex(content, ctx)
+
     # Prompts
     for pattern in PROMPT_PATTERNS:
         for match in pattern.finditer(content):

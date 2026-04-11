@@ -29,7 +29,7 @@ class LLMEngine:
         self,
         mode: str = "ollama",
         url: str = "http://localhost:11434",
-        model: str = "qwen2.5-coder:14b",
+        model: str = "qwen2.5-coder:7b",
         api_key: str | None = None,
         timeout: float = 120.0,
     ):
@@ -88,48 +88,114 @@ class LLMEngine:
     # ── Private helpers ────────────────────────────────────────────────
 
     def _build_prompt(self, asset: AIAsset) -> str:
-        """Build a structured classification prompt for the LLM."""
-        findings_text = []
-        count = 0
-        for f in asset.raw_findings:
-            if count >= 20:
-                findings_text.append(f"... and {len(asset.raw_findings) - 20} more findings")
-                break
-            # Use redacted content for API keys
-            content = f.redacted_content if f.redacted_content else f.content
-            findings_text.append(
-                f"- [{f.type.value}] {f.file_path}"
-                f"{f':L{f.line_number}' if f.line_number else ''}: {content}"
-            )
-            count += 1
+        """Build a prompt with full code context for deep analysis."""
+        sections = []
 
-        deps_text = ", ".join(asset.dependencies) if asset.dependencies else "none"
-
-        return f"""You are an AI security analyst. Analyze the following AI asset discovered in a code repository and classify it.
-
-## Asset Information
+        # Basic info
+        files = asset.file_path.split(", ")
+        sections.append(f"""## Solution
 - Name: {asset.name}
 - Repository: {asset.repository}
-- Provider: {asset.provider.name if asset.provider else 'unknown'}
-- Files: {asset.file_path}
-- Dependencies: {deps_text}
+- Files: {len(files)} ({', '.join(files[:5])})""")
 
-## Findings
-{chr(10).join(findings_text)}
+        # Code context — the key differentiator
+        if asset.code_contexts:
+            ctx_parts = []
 
-## Task
-Based on the findings above, classify this AI asset. Return a JSON object with exactly these keys:
+            # Functions
+            all_funcs = []
+            for ctx in asset.code_contexts:
+                for f in ctx.functions:
+                    name = f.get("name", "")
+                    args = ", ".join(f.get("args", []))
+                    doc = f.get("docstring", "")
+                    body = f.get("body_preview", "")
+                    decorators = f.get("decorators", [])
+                    dec_str = " ".join(decorators) + " " if decorators else ""
+                    entry = f"{dec_str}{name}({args})"
+                    if doc:
+                        entry += f" — {doc[:100]}"
+                    if body:
+                        entry += f"\n    {body[:200]}"
+                    all_funcs.append(entry)
 
-- "data_categories": list of applicable categories from: "public", "internal", "confidential", "pii", "financial", "source_code", "unknown"
-- "confidence": one of "high", "medium", "low"
-- "risk_score": float between 0.0 and 1.0 (0=no risk, 1=critical)
-- "summary": brief description of what this AI integration does and its risk profile
-- "recommendations": list of actionable security recommendations
+            if all_funcs:
+                ctx_parts.append("Functions:\n" + "\n".join(f"- {fn}" for fn in all_funcs[:10]))
 
-## Example Response
-{{"data_categories": ["internal", "source_code"], "confidence": "medium", "risk_score": 0.4, "summary": "OpenAI integration for code analysis with API key stored in source code.", "recommendations": ["Move API key to environment variable or secret manager", "Review data being sent to OpenAI API"]}}
+            # Prompts (most valuable signal)
+            all_prompts = []
+            for ctx in asset.code_contexts:
+                all_prompts.extend(ctx.prompts)
+            if all_prompts:
+                # Show the best prompt (longest, most specific)
+                best = max(all_prompts, key=len)
+                ctx_parts.append(f"System prompt:\n\"{best[:400]}\"")
 
-Return ONLY the JSON object, no other text."""
+            # Model names
+            all_models = []
+            for ctx in asset.code_contexts:
+                all_models.extend(ctx.model_names)
+            if all_models:
+                ctx_parts.append(f"LLM models used: {', '.join(set(all_models))}")
+
+            # API calls
+            all_calls = []
+            for ctx in asset.code_contexts:
+                for call in ctx.api_calls:
+                    all_calls.append(f"{call.get('target', '')}({call.get('args_preview', '')[:80]})")
+            if all_calls:
+                ctx_parts.append("API calls:\n" + "\n".join(f"- {c}" for c in all_calls[:8]))
+
+            # Data sources
+            all_sources = []
+            for ctx in asset.code_contexts:
+                for src in ctx.data_sources:
+                    all_sources.append(f"[{src.get('type', '')}] {src.get('name', '')} — {src.get('detail', '')[:80]}")
+            if all_sources:
+                ctx_parts.append("Data sources:\n" + "\n".join(f"- {s}" for s in all_sources[:6]))
+
+            # Data sinks
+            all_sinks = []
+            for ctx in asset.code_contexts:
+                for sink in ctx.data_sinks:
+                    all_sinks.append(f"[{sink.get('type', '')}] {sink.get('name', '')} — {sink.get('detail', '')[:80]}")
+            if all_sinks:
+                ctx_parts.append("Data outputs:\n" + "\n".join(f"- {s}" for s in all_sinks[:6]))
+
+            # Env vars
+            all_env = set()
+            for ctx in asset.code_contexts:
+                all_env.update(ctx.env_vars)
+            if all_env:
+                ctx_parts.append(f"Environment variables: {', '.join(sorted(all_env)[:8])}")
+
+            if ctx_parts:
+                sections.append("## Code Analysis\n" + "\n\n".join(ctx_parts))
+
+        # Findings (brief)
+        findings = []
+        for f in asset.raw_findings[:10]:
+            content = f.redacted_content if f.redacted_content else f.content
+            findings.append(f"- [{f.type.value}] {f.file_path}: {content}")
+        if findings:
+            sections.append("## Scan Findings\n" + "\n".join(findings))
+
+        # Task
+        sections.append("""## Task
+Based on the code analysis above, describe this AI solution. Return a JSON object with exactly these keys:
+
+- "summary": 2-3 sentences describing what this solution DOES, what data it processes, and its purpose. Be specific — mention the actual functionality, not just the framework.
+- "data_categories": list from: "public", "internal", "confidential", "pii", "financial", "source_code", "unknown"
+- "confidence": "high", "medium", or "low"
+- "risk_score": float 0.0-1.0 (0=safe, 1=critical risk)
+- "recommendations": list of 2-3 actionable recommendations
+
+Example:
+{"summary": "Voice transcription pipeline that records customer calls, transcribes audio via Whisper API, extracts key topics using GPT-4, and stores results in PostgreSQL. Processes audio recordings containing personal customer information.", "data_categories": ["pii", "internal"], "confidence": "high", "risk_score": 0.6, "recommendations": ["Ensure customer consent for call recording", "Add PII redaction before storing transcripts"]}
+
+Return ONLY the JSON object.""")
+
+        return "\n\n".join(sections)
 
     def _call_ollama(self, prompt: str) -> str:
         """Call Ollama REST API."""
@@ -140,6 +206,10 @@ Return ONLY the JSON object, no other text."""
                 "prompt": prompt,
                 "stream": False,
                 "format": "json",
+                "options": {
+                    "num_ctx": 8192,
+                    "temperature": 0.1,
+                },
             },
         )
         response.raise_for_status()

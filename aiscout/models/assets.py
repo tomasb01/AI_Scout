@@ -98,6 +98,7 @@ class CodeContext(BaseModel):
     data_sinks: list[dict] = []  # {type, name, detail}
     prompts: list[str] = []  # system/user prompt texts
     env_vars: list[str] = []
+    model_names: list[str] = []  # LLM model identifiers found in code (e.g. "gpt-4o", "claude-3-sonnet")
     raw_snippets: list[str] = []  # key code excerpts (truncated)
 
 

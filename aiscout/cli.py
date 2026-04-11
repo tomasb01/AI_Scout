@@ -38,7 +38,7 @@ def cli():
 @click.option("--branch", "-b", default="main", help="Default branch to scan")
 @click.option("--output", "-o", default="aiscout_report.html", help="Output report path")
 @click.option("--llm-url", default="http://localhost:11434", help="LLM API URL")
-@click.option("--llm-model", default="qwen2.5-coder:14b", help="LLM model name")
+@click.option("--llm-model", default="qwen2.5-coder:7b", help="LLM model name")
 @click.option(
     "--llm-mode",
     type=click.Choice(["ollama", "openai"]),

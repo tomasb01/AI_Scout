@@ -8,7 +8,7 @@ from pathlib import Path
 from jinja2 import Environment, PackageLoader
 
 from aiscout import __version__
-from aiscout.engine.enrichment import AssetInsight, enrich_assets
+from aiscout.engine.enrichment import AssetInsight, _deduplicate_tech_stack, enrich_assets
 from aiscout.knowledge.providers import get_provider
 from aiscout.models import AIAsset, FindingType, ScanResult
 
@@ -235,7 +235,7 @@ class ReportGenerator:
                 "count": len(group),
                 "authors": authors,
                 "repos": repos,
-                "tech_stacks": sorted(techs),
+                "tech_stacks": sorted(_deduplicate_tech_stack(techs)),
                 "assets": group,
             })
 

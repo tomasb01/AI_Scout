@@ -109,8 +109,9 @@ def test_prompt_truncation():
     ]
     engine = LLMEngine(mode="ollama")
     prompt = engine._build_prompt(asset)
-    # Should contain "and 10 more findings"
-    assert "10 more findings" in prompt
+    # Should truncate — not all 30 findings in prompt
+    finding_lines = [l for l in prompt.split("\n") if "[import_detected]" in l]
+    assert len(finding_lines) <= 10
 
 
 def test_api_key_redaction_in_prompt():
