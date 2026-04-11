@@ -10,7 +10,8 @@ from pathlib import Path
 
 import httpx
 from fastapi import FastAPI, Request
-from fastapi.responses import HTMLResponse, JSONResponse
+from fastapi.responses import HTMLResponse, JSONResponse, FileResponse
+from fastapi.staticfiles import StaticFiles
 from sse_starlette.sse import EventSourceResponse
 
 from aiscout import __version__
@@ -21,11 +22,28 @@ app = FastAPI(title="AI Scout", version=__version__)
 _scans: dict[str, dict] = {}
 
 
+# Mount static files for landing page screenshots
+_landing_dir = Path(__file__).parent.parent.parent / "landing"
+if _landing_dir.exists():
+    _ss_dir = _landing_dir / "screenshots"
+    if _ss_dir.exists():
+        app.mount("/screenshots", StaticFiles(directory=str(_ss_dir)), name="screenshots")
+
 # ── Static UI ──────────────────────────────────────────────────────────────
 
 
 @app.get("/", response_class=HTMLResponse)
-async def index():
+async def landing():
+    """Serve the landing page."""
+    landing_path = Path(__file__).parent.parent.parent / "landing" / "index.html"
+    if landing_path.exists():
+        return HTMLResponse(landing_path.read_text(encoding="utf-8"))
+    # Fallback to app if no landing page
+    return await app_ui()
+
+
+@app.get("/app", response_class=HTMLResponse)
+async def app_ui():
     """Serve the wizard UI."""
     template_path = Path(__file__).parent / "templates" / "index.html"
     return HTMLResponse(template_path.read_text(encoding="utf-8"))

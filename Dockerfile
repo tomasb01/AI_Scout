@@ -8,6 +8,7 @@ WORKDIR /app
 # Copy project files
 COPY pyproject.toml .
 COPY aiscout/ aiscout/
+COPY landing/ landing/
 
 # Install dependencies
 RUN pip install --no-cache-dir .
