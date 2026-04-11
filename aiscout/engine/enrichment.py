@@ -40,11 +40,27 @@ def enrich_asset(asset: AIAsset) -> AssetInsight:
     recommendations = _build_recommendations(asset, provider, risk_reasons)
     tech_stack = _extract_tech_stack(asset)
     data_involved = _extract_data_involved(asset)
+
+    # Enrich data_involved from LLM classification if available
+    if asset.data_classification and asset.data_classification.categories:
+        for cat in asset.data_classification.categories:
+            label = cat.value.replace("_", " ").title()
+            if label not in data_involved:
+                data_involved.append(label)
+        data_involved.sort()
+
+    # Use LLM recommendations if available
+    if asset.data_classification and asset.data_classification.recommendations:
+        recommendations = asset.data_classification.recommendations
+
     category = _classify_category(asset)
     solution_name = _derive_solution_display_name(asset, category)
 
-    # Recalculate risk score based on reasons
-    asset.risk_score = _calculate_risk_score(risk_reasons)
+    # Risk score: use LLM score if available, otherwise rule-based
+    if asset.data_classification and asset.data_classification.risk_score > 0:
+        asset.risk_score = max(asset.risk_score, asset.data_classification.risk_score)
+    else:
+        asset.risk_score = _calculate_risk_score(risk_reasons)
 
     return AssetInsight(
         summary=summary,
@@ -67,11 +83,14 @@ def enrich_assets(assets: list[AIAsset]) -> dict[str, AssetInsight]:
 
 
 def _build_summary(asset: AIAsset, provider: ProviderProfile | None) -> str:
-    """Generate a summary focused on WHAT the solution does, not what the provider is.
+    """Generate a summary focused on WHAT the solution does.
 
-    Priority: purpose from code > directory context > provider name.
-    Provider goes into tech_stack, not into summary.
+    Priority: LLM classification > code context > directory context > provider.
     """
+    # Priority 0: LLM classification (most accurate when available)
+    if asset.data_classification and asset.data_classification.details:
+        return asset.data_classification.details
+
     purpose = _infer_purpose(asset)
 
     if purpose:
