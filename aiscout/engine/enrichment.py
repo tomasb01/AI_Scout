@@ -747,10 +747,17 @@ _MODEL_SUPPRESSES_PROVIDER = {
 }
 
 # More specific version suppresses generic: "Llama 3" suppresses "Llama"
+# Newer model in same family suppresses older: "GPT-4o" suppresses "GPT-4" and "GPT-3.5"
 _SPECIFIC_SUPPRESSES_GENERIC = {
     "Llama": {"Llama 2", "Llama 3"},
+    "Llama 2": {"Llama 3"},
     "Qwen": {"Qwen 2"},
-    "Phi-3": {"Phi-4"},  # don't suppress — both can coexist; but "Phi-3" doesn't suppress "Phi-4"
+    "GPT-3": {"GPT-3.5", "GPT-4", "GPT-4o", "GPT-4 Turbo"},
+    "GPT-3.5": {"GPT-4", "GPT-4o", "GPT-4 Turbo"},
+    "GPT-4": {"GPT-4o", "GPT-4 Turbo"},
+    "Claude 2": {"Claude 3", "Claude 3.5", "Claude 4"},
+    "Claude 3": {"Claude 3.5", "Claude 4"},
+    "Gemini 1.5": {"Gemini 2"},
 }
 
 

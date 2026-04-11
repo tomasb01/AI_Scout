@@ -294,3 +294,19 @@ def _print_summary(scan_results: list, report_path: Path):
 
     console.print(table)
     console.print(f"\nReport saved to [bold blue]{report_path}[/]")
+
+
+@cli.command()
+@click.option("--host", default="0.0.0.0", help="Host to bind to")
+@click.option("--port", "-p", default=8080, help="Port to run on")
+def web(host, port):
+    """Start the AI Scout Web UI."""
+    from aiscout.web.app import run_server
+
+    console.print(Panel(
+        f"[bold]Starting Web UI[/]\n"
+        f"Open [blue]http://localhost:{port}[/] in your browser",
+        title="AI Scout Web",
+        border_style="blue",
+    ))
+    run_server(host=host, port=port)

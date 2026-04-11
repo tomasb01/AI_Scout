@@ -390,6 +390,7 @@ footer{text-align:center;color:var(--text-dim);font-size:.65rem;margin-top:2rem;
 <thead>
 <tr>
   <th>Solution</th>
+  <th>Repo</th>
   <th>Built On</th>
   <th>Author</th>
   <th>Data Involved</th>
@@ -406,6 +407,7 @@ footer{text-align:center;color:var(--text-dim);font-size:.65rem;margin-top:2rem;
     <div class="sol-name">{{ insight.solution_name if insight and insight.solution_name else asset.name }}</div>
     <div class="sol-desc">{{ insight.summary[:120] if insight else '' }}{% if insight and insight.summary | length > 120 %}...{% endif %}</div>
   </td>
+  <td style="font-size:.75rem;color:var(--text-muted)">{{ asset.repository }}</td>
   <td>
     {% if insight and insight.tech_stack %}
     {% for tech in insight.tech_stack[:4] %}<span class="tech-tag">{{ tech }}</span>{% endfor %}
@@ -433,7 +435,7 @@ footer{text-align:center;color:var(--text-dim);font-size:.65rem;margin-top:2rem;
 
 {# ─── DETAIL ROW ─── #}
 <tr class="detail-row" data-id="{{ asset.id }}">
-<td colspan="5" class="detail-cell">
+<td colspan="6" class="detail-cell">
 <div class="detail-grid">
   <div>
     {# Summary #}
@@ -710,11 +712,12 @@ function simulate() {
       }
     }
 
-    // Attraction (edges) — longer ideal distance
+    // Attraction (edges) — pull connected nodes together strongly
     edges.forEach(e=>{
       let dx=e.target.x-e.source.x, dy=e.target.y-e.source.y;
       let dist=Math.sqrt(dx*dx+dy*dy)||1;
-      let force=alpha*(dist-120)*0.003;
+      let idealDist = e.type==='overlap' ? 40 : 70;
+      let force=alpha*(dist-idealDist)*0.015;
       let fx=dx/dist*force, fy=dy/dist*force;
       e.source.vx+=fx; e.source.vy+=fy;
       e.target.vx-=fx; e.target.vy-=fy;
@@ -775,9 +778,9 @@ function draw(){
     c.beginPath();
     c.moveTo(e.source.x,e.source.y);
     c.lineTo(e.target.x,e.target.y);
-    c.lineWidth = e.type==='overlap' ? 1 : 0.5;
+    c.lineWidth = e.type==='overlap' ? 2 : 0.8;
     c.strokeStyle = dimmed ? 'rgba(99,102,241,0.04)' :
-      e.type==='overlap' ? 'rgba(245,158,11,0.35)' : 'rgba(99,102,241,0.12)';
+      e.type==='overlap' ? 'rgba(245,158,11,0.5)' : 'rgba(99,102,241,0.2)';
     c.stroke();
   });
 
@@ -806,14 +809,45 @@ function draw(){
     }
   });
 
-  // Draw cluster labels on background for Solutions view
-  if(currentView==='solutions' && window._groupTargets){
+  // Draw cluster backgrounds for Solutions view
+  if(currentView==='solutions'){
     c.textAlign = 'center';
-    Object.entries(window._groupTargets).forEach(([group, pos]) => {
+    // Compute actual center + radius from node positions per group
+    const groupInfo = {};
+    nodes.forEach(n => {
+      if(!n.visible) return;
+      if(!groupInfo[n.group]) groupInfo[n.group] = {xs:[],ys:[],color:n.color};
+      groupInfo[n.group].xs.push(n.x);
+      groupInfo[n.group].ys.push(n.y);
+    });
+    Object.entries(groupInfo).forEach(([group, info]) => {
       if(activeGroup && activeGroup !== group) return;
+      if(info.xs.length < 2) return;
+      const cx = info.xs.reduce((a,b)=>a+b,0) / info.xs.length;
+      const cy = info.ys.reduce((a,b)=>a+b,0) / info.ys.length;
+      // Radius = max distance from center + padding
+      let maxDist = 0;
+      info.xs.forEach((x,i) => {
+        const d = Math.sqrt((x-cx)**2 + (info.ys[i]-cy)**2);
+        if(d > maxDist) maxDist = d;
+      });
+      const radius = maxDist + 30;
+      const hex = info.color;
+      const r=parseInt(hex.slice(1,3),16), g=parseInt(hex.slice(3,5),16), b=parseInt(hex.slice(5,7),16);
+      // Background
+      c.beginPath();
+      c.arc(cx, cy, radius, 0, Math.PI*2);
+      c.fillStyle = `rgba(${r},${g},${b},0.05)`;
+      c.fill();
+      c.strokeStyle = `rgba(${r},${g},${b},0.15)`;
+      c.lineWidth = 1;
+      c.setLineDash([5,5]);
+      c.stroke();
+      c.setLineDash([]);
+      // Label
       c.font = 'bold 13px -apple-system,system-ui,sans-serif';
-      c.fillStyle = 'rgba(225,228,237,0.12)';
-      c.fillText(group, pos.x, pos.y - Math.min(W,H)*0.12);
+      c.fillStyle = `rgba(${r},${g},${b},0.5)`;
+      c.fillText(group, cx, cy - radius - 6);
     });
   }
 }

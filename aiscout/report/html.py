@@ -403,16 +403,32 @@ class ReportGenerator:
                 "risk": self._get_risk_class(asset.risk_score),
             })
 
-        # Edges: connect solutions with same solution_name (overlap)
+        # Edges: overlap (same name) + shared tech stack
         seen_names: dict[str, list[str]] = defaultdict(list)
+        tech_to_assets: dict[str, list[str]] = defaultdict(list)
         for asset in assets:
             insight = self.insights.get(asset.id) if self.insights else None
             name = insight.solution_name if insight else asset.name
             seen_names[name].append(asset.id)
+            if insight:
+                for tech in insight.tech_stack:
+                    tech_to_assets[tech].append(asset.id)
+
+        # Overlap edges (strong)
         for name, ids in seen_names.items():
             if len(ids) > 1:
                 for i in range(len(ids) - 1):
                     sol_edges.append({"from": ids[i], "to": ids[i + 1], "type": "overlap"})
+
+        # Shared tech edges (weaker, only for less common techs)
+        edge_set = set()
+        for tech, ids in tech_to_assets.items():
+            if 2 <= len(ids) <= 15:  # skip very common techs
+                for i in range(min(len(ids) - 1, 3)):  # limit edges per tech
+                    key = tuple(sorted([ids[i], ids[i + 1]]))
+                    if key not in edge_set:
+                        edge_set.add(key)
+                        sol_edges.append({"from": ids[i], "to": ids[i + 1], "type": "tech"})
 
         # ── Tech graph ──
         tech_nodes = []
