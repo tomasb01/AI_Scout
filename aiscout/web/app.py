@@ -14,11 +14,6 @@ from fastapi.responses import HTMLResponse, JSONResponse
 from sse_starlette.sse import EventSourceResponse
 
 from aiscout import __version__
-from aiscout.engine.code_analyzer import analyze_assets
-from aiscout.engine.enrichment import enrich_assets
-from aiscout.engine.llm import LLMEngine
-from aiscout.report.html import ReportGenerator
-from aiscout.scanners.git_scanner import GitScanner
 
 app = FastAPI(title="AI Scout", version=__version__)
 
@@ -126,6 +121,13 @@ async def _run_scan(scan_id: str, config: dict):
         scan["progress"].append({"message": msg, "level": level})
 
     try:
+        # Lazy imports — GitPython needs git executable, only import when scanning
+        from aiscout.engine.code_analyzer import analyze_assets
+        from aiscout.engine.enrichment import enrich_assets
+        from aiscout.engine.llm import LLMEngine
+        from aiscout.report.html import ReportGenerator
+        from aiscout.scanners.git_scanner import GitScanner
+
         repos = config.get("repositories", [])
         llm_config = config.get("llm", {"mode": "none"})
 
