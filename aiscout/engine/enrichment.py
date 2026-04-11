@@ -88,7 +88,156 @@ def _build_summary(asset: AIAsset, provider: ProviderProfile | None) -> str:
 
 
 def _infer_purpose(asset: AIAsset) -> str:
-    """Infer what the AI solution does from file paths, imports, and code context."""
+    """Infer what the AI solution does from code context, file paths, and imports."""
+    # Priority 1: Use code contexts if available (deep analysis)
+    if asset.code_contexts:
+        purpose = _infer_from_code_contexts(asset)
+        if purpose:
+            return purpose
+
+    # Priority 2: Fallback to file path / import heuristics
+    return _infer_from_paths(asset)
+
+
+def _infer_from_code_contexts(asset: AIAsset) -> str:
+    """Infer purpose from extracted code contexts — functions, prompts, API calls."""
+    parts = []
+
+    # Collect all context data across files
+    all_functions = []
+    all_prompts = []
+    all_api_calls = []
+    all_sources = []
+    all_sinks = []
+    all_env_vars = []
+
+    for ctx in asset.code_contexts:
+        all_functions.extend(ctx.functions)
+        all_prompts.extend(ctx.prompts)
+        all_api_calls.extend(ctx.api_calls)
+        all_sources.extend(ctx.data_sources)
+        all_sinks.extend(ctx.data_sinks)
+        all_env_vars.extend(ctx.env_vars)
+
+    # ── Prompts tell us the most about purpose ──
+    if all_prompts:
+        # Use the first/longest prompt to describe purpose
+        best_prompt = max(all_prompts, key=len)
+        # Extract first sentence or "You are X" pattern
+        purpose_from_prompt = _extract_purpose_from_prompt(best_prompt)
+        if purpose_from_prompt:
+            parts.append(purpose_from_prompt)
+
+    # ── Functions with decorators (Flask routes, FastAPI endpoints) ──
+    endpoints = []
+    for func in all_functions:
+        decorators = func.get("decorators", [])
+        for dec in decorators:
+            if "route" in dec or "app." in dec or "router." in dec:
+                args_str = ", ".join(func.get("args", []))
+                endpoints.append(f"{func['name']}({args_str})")
+
+    if endpoints and not parts:
+        parts.append(f"API service with endpoints: {', '.join(endpoints[:5])}.")
+
+    # ── Data flow description ──
+    source_types = set()
+    sink_types = set()
+
+    for src in all_sources:
+        if src["type"] == "database":
+            detail = src.get("detail", "").upper()
+            if "SELECT" in detail:
+                # Extract table name
+                import re
+                table_match = re.search(r'FROM\s+(\w+)', detail, re.IGNORECASE)
+                if table_match:
+                    source_types.add(f"database ({table_match.group(1)})")
+                else:
+                    source_types.add("database")
+            else:
+                source_types.add("database")
+        elif src["type"] == "file":
+            source_types.add("file input")
+        else:
+            source_types.add(src["type"])
+
+    for sink in all_sinks:
+        if sink["type"] == "http":
+            sink_types.add(f"external API ({sink.get('detail', '')[:40]})")
+        elif sink["type"] == "file":
+            sink_types.add("file output")
+        elif sink["type"] == "database":
+            sink_types.add("database")
+        else:
+            sink_types.add(sink["type"])
+
+    if source_types or sink_types:
+        flow_parts = []
+        if source_types:
+            flow_parts.append(f"Reads from: {', '.join(list(source_types)[:3])}")
+        if sink_types:
+            flow_parts.append(f"Outputs to: {', '.join(list(sink_types)[:3])}")
+        if flow_parts:
+            parts.append(". ".join(flow_parts) + ".")
+
+    # ── Key functions describe what the code does ──
+    if not parts:
+        meaningful_funcs = [
+            f for f in all_functions
+            if f["name"] not in ("__init__", "main", "setup", "config")
+            and not f["name"].startswith("_")
+        ]
+        if meaningful_funcs:
+            func_names = [f["name"] for f in meaningful_funcs[:5]]
+            docstrings = [f["docstring"] for f in meaningful_funcs if f.get("docstring")]
+            if docstrings:
+                parts.append(docstrings[0][:150] + "." if not docstrings[0].endswith(".") else docstrings[0][:150])
+            else:
+                parts.append(f"Functions: {', '.join(func_names)}.")
+
+    # ── AI API calls ──
+    if all_api_calls and not any("API" in p for p in parts):
+        targets = set(call.get("target", "")[:50] for call in all_api_calls[:3])
+        if targets:
+            parts.append(f"AI calls: {', '.join(targets)}.")
+
+    # ── Environment variables hint at integrations ──
+    interesting_vars = [v for v in all_env_vars if any(
+        kw in v.upper() for kw in ("KEY", "TOKEN", "URL", "HOST", "DB", "SECRET", "API")
+    )]
+    if interesting_vars and not parts:
+        parts.append(f"Uses config: {', '.join(interesting_vars[:4])}.")
+
+    # ── Fallback to file path heuristics if code context didn't produce much ──
+    if not parts:
+        return _infer_from_paths(asset)
+
+    return " ".join(parts)
+
+
+def _extract_purpose_from_prompt(prompt_text: str) -> str:
+    """Extract purpose description from a system prompt."""
+    import re
+    text = prompt_text.strip()
+
+    # "You are X" pattern
+    match = re.match(r"(?:You are|You're|Act as|I am|I'm)\s+(.+?)(?:\.|$)", text, re.IGNORECASE)
+    if match:
+        role = match.group(1).strip()
+        if len(role) > 10:
+            return f"AI assistant: \"{role[:150]}\"."
+
+    # First sentence if it's descriptive enough
+    first_sentence = text.split(".")[0].strip()
+    if 15 < len(first_sentence) < 200:
+        return f"System prompt: \"{first_sentence}\"."
+
+    return ""
+
+
+def _infer_from_paths(asset: AIAsset) -> str:
+    """Fallback: infer purpose from file paths and import names."""
     file_paths = asset.file_path.split(", ") if asset.file_path else []
     all_paths_lower = " ".join(file_paths).lower()
     all_imports = " ".join(
@@ -96,61 +245,34 @@ def _infer_purpose(asset: AIAsset) -> str:
         if f.type == FindingType.IMPORT_DETECTED
     )
 
-    # Collect signals from file/dir names and imports
     signals: list[str] = []
 
-    # ── Fine-tuning / Training signals ──
     if any(kw in all_paths_lower for kw in ("finetun", "fine_tun", "fine-tun", "train")):
-        # Try to find model names from file/dir names
         models = _extract_model_names(all_paths_lower + " " + all_imports)
         if models:
             signals.append(f"Fine-tuning pipeline for {', '.join(models)} model{'s' if len(models) > 1 else ''}.")
         else:
             signals.append("Model fine-tuning and training pipeline.")
-
-    # ── RAG signals ──
     elif any(kw in all_paths_lower for kw in ("rag", "retriev", "embed", "search", "vector")):
-        if "embed" in all_paths_lower and "upload" in all_paths_lower:
-            signals.append("Embedding generation and vector storage for RAG retrieval.")
+        if "agent" in all_paths_lower:
+            signals.append("RAG-powered AI agent pipeline.")
         elif "search" in all_paths_lower:
             signals.append("Semantic search and retrieval system.")
-        elif "agent" in all_paths_lower:
-            signals.append("RAG-powered AI agent pipeline.")
         else:
             signals.append("Retrieval-Augmented Generation (RAG) pipeline.")
-
-    # ── Script / notebook signals (before backend, since scripts may contain "api" in name) ──
     elif any(kw in all_paths_lower for kw in ("script", "notebook", ".ipynb", "homework", "example", "demo")):
         signals.append("AI development scripts and experiments.")
-
-    # ── Backend / API signals ──
     elif any(kw in all_paths_lower for kw in ("backend", "server", "app.py", "main.py")):
-        if "chat" in all_paths_lower or "conversation" in all_paths_lower:
-            signals.append("Backend API with AI-powered chat/conversation functionality.")
-        else:
-            signals.append("Backend application with AI integration.")
-
-    # ── Chatbot signals ──
-    elif any(kw in all_paths_lower for kw in ("chat", "bot", "assistant", "conversation")):
+        signals.append("Backend application with AI integration.")
+    elif any(kw in all_paths_lower for kw in ("chat", "bot", "assistant")):
         signals.append("Conversational AI / chatbot application.")
-
-    # ── Data processing signals ──
-    elif any(kw in all_paths_lower for kw in ("pipeline", "process", "etl", "data")):
-        signals.append("Data processing pipeline with AI components.")
-
-    # ── Agent signals ──
     elif any(kw in all_paths_lower for kw in ("agent", "crew", "autogen")):
         signals.append("AI agent system.")
-
-    # If we have specific import context, enrich
-    if not signals:
-        # Generic: describe based on what's imported
-        if "transformers" in all_imports or "automodel" in all_imports:
+    elif not signals:
+        if "transformers" in all_imports:
             signals.append("ML model inference using Transformers library.")
         elif "chat" in all_imports or "completion" in all_imports:
             signals.append("AI-powered text generation / chat completion.")
-        elif "embedding" in all_imports:
-            signals.append("Text embedding and vector operations.")
 
     return " ".join(signals)
 

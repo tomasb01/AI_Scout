@@ -83,6 +83,24 @@ class Finding(BaseModel):
     provider: str = ""
 
 
+# ── Code analysis models ───────────────────────────────────────────────────
+
+
+class CodeContext(BaseModel):
+    """Structured context extracted from source code analysis."""
+
+    file_path: str
+    language: str = ""  # python, javascript, typescript, etc.
+    functions: list[dict] = []  # {name, args, docstring, body_preview}
+    classes: list[dict] = []  # {name, methods, docstring}
+    api_calls: list[dict] = []  # {target, method, args_preview}
+    data_sources: list[dict] = []  # {type, name, detail}
+    data_sinks: list[dict] = []  # {type, name, detail}
+    prompts: list[str] = []  # system/user prompt texts
+    env_vars: list[str] = []
+    raw_snippets: list[str] = []  # key code excerpts (truncated)
+
+
 # ── Primary entities ───────────────────────────────────────────────────────
 
 
@@ -104,6 +122,7 @@ class AIAsset(BaseModel):
     repository: str = ""
     dependencies: list[str] = []
     raw_findings: list[Finding] = []
+    code_contexts: list[CodeContext] = []
 
 
 class ScannerConfig(BaseModel):

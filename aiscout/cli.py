@@ -14,6 +14,7 @@ from rich.progress import Progress, SpinnerColumn, TextColumn
 from rich.table import Table
 
 from aiscout import __version__
+from aiscout.engine.code_analyzer import analyze_assets
 from aiscout.engine.enrichment import enrich_assets
 from aiscout.engine.llm import LLMEngine
 from aiscout.report.html import ReportGenerator
@@ -78,6 +79,7 @@ def scan(
 
     # Scan each repo
     scan_results = []
+    scanners = []  # keep for cleanup after code analysis
     with Progress(
         SpinnerColumn(),
         TextColumn("[progress.description]{task.description}"),
@@ -96,6 +98,7 @@ def scan(
 
             result = scanner.scan()
             scan_results.append(result)
+            scanners.append(scanner)
 
             if result.errors:
                 for err in result.errors:
@@ -107,6 +110,16 @@ def scan(
                 )
 
             progress.remove_task(task)
+
+    # Code context analysis (reads files from repo before cleanup)
+    for result in scan_results:
+        repo_root = result.metadata.get("repo_root")
+        if repo_root and result.assets:
+            analyze_assets(result.assets, repo_root)
+
+    # Cleanup cloned repos
+    for scanner in scanners:
+        scanner.cleanup()
 
     # Aggregate results
     if not scan_results:

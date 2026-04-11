@@ -185,6 +185,13 @@ class GitScanner(BaseScanner):
         self.repo_url = repo_url
         self.branch = branch
         self.token = token
+        self._cleanup = None
+
+    def cleanup(self):
+        """Clean up temporary files (cloned repos). Call after code analysis."""
+        if self._cleanup:
+            self._cleanup()
+            self._cleanup = None
 
     def get_config(self) -> ScannerConfig:
         return ScannerConfig(
@@ -234,8 +241,8 @@ class GitScanner(BaseScanner):
             # Extract git authors for each asset
             self._enrich_with_git_authors(root, assets)
 
-            if cleanup:
-                cleanup()
+            # Store cleanup for later (after code analysis reads the files)
+            self._cleanup = cleanup
 
             return ScanResult(
                 scanner="git_scanner",
@@ -246,6 +253,7 @@ class GitScanner(BaseScanner):
                     "repository": repo_name,
                     "branch": self.branch,
                     "files_scanned": files_scanned,
+                    "repo_root": str(root),
                 },
             )
 
