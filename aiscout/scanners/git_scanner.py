@@ -254,6 +254,7 @@ class GitScanner(BaseScanner):
                     "branch": self.branch,
                     "files_scanned": files_scanned,
                     "repo_root": str(root),
+                    "repo_url": self.repo_url or "",
                 },
             )
 

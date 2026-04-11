@@ -34,6 +34,8 @@ a{color:var(--accent);text-decoration:none}
 .st{background:var(--surface);border:1px solid var(--border);border-radius:6px;padding:.8rem;text-align:center}
 .st .v{font-size:1.4rem;font-weight:700}.st .l{color:var(--text-muted);font-size:.65rem;text-transform:uppercase;letter-spacing:.04em}
 .st.s-crit .v{color:var(--critical)}.st.s-warn .v{color:var(--warning)}.st.s-ok .v{color:var(--ok)}
+.st-link{text-decoration:none;color:inherit;cursor:pointer;transition:border-color .15s,transform .1s}
+.st-link:hover{border-color:var(--accent);transform:translateY(-2px)}
 
 /* Heatmap */
 .hm{display:flex;height:5px;border-radius:3px;overflow:hidden;margin-bottom:1.2rem;gap:2px}
@@ -95,6 +97,97 @@ select.repo-sel{background:var(--surface);border:1px solid var(--border);color:v
 
 footer{text-align:center;color:var(--text-dim);font-size:.65rem;margin-top:2rem;padding-top:.5rem;border-top:1px solid var(--border)}
 .empty{text-align:center;padding:2rem;color:var(--text-muted)}
+
+/* Executive Summary */
+.exec{background:linear-gradient(135deg,#1e2235,#161929);border:1px solid var(--accent);border-radius:10px;padding:1.5rem 2rem;margin-bottom:1.5rem;box-shadow:0 0 30px rgba(99,102,241,0.08)}
+.exec h2{font-size:1rem;font-weight:700;margin-bottom:.8rem;color:var(--accent);display:flex;align-items:center;gap:.5rem}
+.exec h2::before{content:"";display:inline-block;width:4px;height:18px;background:var(--accent);border-radius:2px}
+.exec ul{list-style:none;font-size:.85rem;line-height:1.8}
+.exec li{padding:.25rem 0;border-bottom:1px solid rgba(99,102,241,0.12)}.exec li:last-child{border:none}
+.exec li::before{content:"";display:inline-block;width:6px;height:6px;border-radius:50%;background:var(--accent);margin-right:.6rem;vertical-align:middle}
+.exec strong{color:#fff}
+
+/* Overlap section */
+.overlap-card{background:var(--surface);border:1px solid var(--border);border-radius:6px;padding:.8rem 1rem;margin-bottom:.5rem}
+.overlap-card .oc-head{display:flex;justify-content:space-between;align-items:center;margin-bottom:.3rem}
+.overlap-card .oc-title{font-weight:600;font-size:.85rem}
+.overlap-card .oc-count{background:var(--warning-bg);color:var(--warning);padding:.1rem .5rem;border-radius:10px;font-size:.7rem;font-weight:700}
+.overlap-card{cursor:pointer}
+.overlap-card summary{list-style:none}.overlap-card summary::-webkit-details-marker{display:none}
+.overlap-card .oc-meta{font-size:.7rem;color:var(--text-muted)}
+.overlap-card .oc-techs{margin-top:.3rem}
+.overlap-card .oc-detail{padding:.4rem 0}
+
+/* Analytics grid */
+.analytics{display:grid;grid-template-columns:1fr 1fr;gap:1rem;margin-bottom:1.5rem}
+@media(max-width:900px){.analytics{grid-template-columns:1fr}}
+.a-panel{background:var(--surface);border:1px solid var(--border);border-radius:6px;padding:1rem}
+.a-panel h3{font-size:.75rem;font-weight:600;text-transform:uppercase;letter-spacing:.04em;color:var(--text-muted);margin-bottom:.6rem}
+
+/* Bar chart */
+.bar-row{display:flex;align-items:center;gap:.5rem;margin-bottom:.3rem;font-size:.75rem}
+.bar-label{min-width:100px;color:var(--text);text-align:right;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.bar-track{flex:1;height:18px;background:var(--surface2);border-radius:3px;overflow:hidden;position:relative}
+.bar-fill{height:100%;border-radius:3px;display:flex;align-items:center;padding:0 .4rem;font-size:.65rem;font-weight:600;color:#fff;min-width:20px}
+.bar-fill.b-accent{background:var(--accent)}.bar-fill.b-blue{background:var(--blue)}.bar-fill.b-warning{background:var(--warning)}.bar-fill.b-critical{background:var(--critical)}.bar-fill.b-ok{background:var(--ok)}.bar-fill.b-purple{background:var(--purple)}
+.bar-val{min-width:25px;text-align:right;color:var(--text-muted);font-size:.7rem}
+
+/* Author table */
+.auth-row{display:flex;align-items:center;gap:.5rem;padding:.3rem 0;border-bottom:1px solid var(--border);font-size:.75rem}
+.auth-name{min-width:120px;font-weight:600;color:var(--text);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.auth-bar{flex:1;height:14px;background:var(--surface2);border-radius:3px;overflow:hidden}
+.auth-fill{height:100%;border-radius:3px;background:var(--blue)}
+.auth-fill.spof{background:var(--warning)}
+.auth-info{font-size:.7rem;color:var(--text-muted);min-width:60px;text-align:right}
+.spof-badge{font-size:.6rem;background:var(--warning-bg);color:var(--warning);padding:.05rem .3rem;border-radius:3px;margin-left:.3rem}
+
+/* Data sensitivity */
+.ds-row{display:flex;align-items:center;gap:.4rem;padding:.25rem 0;border-bottom:1px solid var(--border);font-size:.75rem}
+.ds-type{min-width:140px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.ds-bar{flex:1;height:14px;background:var(--surface2);border-radius:3px;overflow:hidden;display:flex}
+.ds-ok{background:var(--ok);height:100%}.ds-warn{background:var(--warning);height:100%}.ds-crit{background:var(--critical);height:100%}
+.ds-total{min-width:25px;text-align:right;color:var(--text-muted);font-size:.7rem}
+
+/* Category cards */
+.cats{display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:.6rem;margin-bottom:1.2rem}
+.cat{background:var(--surface);border:1px solid var(--border);border-radius:6px;padding:.8rem 1rem;cursor:pointer;transition:border-color .15s}
+.cat:hover,.cat.active{border-color:var(--accent)}
+.cat .cat-count{font-size:1.5rem;font-weight:700;color:var(--accent)}
+.cat .cat-name{font-size:.85rem;font-weight:600;margin-top:.1rem}
+.cat .cat-sub{font-size:.7rem;color:var(--text-muted);margin-top:.1rem}
+
+/* Analytics wrap */
+.analytics-wrap{margin-bottom:1.5rem}
+.analytics-wrap > summary{list-style:none;background:var(--surface);border:1px solid var(--border);border-radius:6px;padding:.6rem 1rem;font-size:.8rem;font-weight:600;color:var(--accent);cursor:pointer;transition:all .15s;display:flex;align-items:center;gap:.5rem}
+.analytics-wrap > summary:hover{border-color:var(--accent);background:var(--surface2)}
+.analytics-wrap > summary::-webkit-details-marker{display:none}
+.analytics-wrap > summary::before{content:"▸";font-size:.7rem;transition:transform .2s;display:inline-block}
+.analytics-wrap[open] > summary::before{transform:rotate(90deg)}
+.analytics-wrap[open] > summary{border-bottom-left-radius:0;border-bottom-right-radius:0;margin-bottom:0}
+.analytics-wrap[open] .analytics{border:1px solid var(--border);border-top:none;border-radius:0 0 6px 6px;padding:1rem}
+
+/* Graph */
+.graph-wrap{background:var(--surface);border:1px solid var(--border);border-radius:8px;overflow:hidden;position:relative;display:flex;flex-direction:column}
+.graph-top{display:flex;justify-content:space-between;align-items:center;border-bottom:1px solid var(--border)}
+.graph-tabs{display:flex;gap:0}
+.g-tab{background:var(--surface);border:none;color:var(--text-muted);padding:.5rem 1.2rem;font-size:.8rem;cursor:pointer;border-bottom:2px solid transparent;transition:all .15s}
+.g-tab:hover{color:var(--text)}.g-tab.active{color:var(--accent);border-bottom-color:var(--accent);background:var(--surface2)}
+.graph-body{display:flex;height:500px}
+.graph-sidebar{width:180px;border-right:1px solid var(--border);padding:.5rem;overflow-y:auto;flex-shrink:0;background:var(--surface2)}
+.gs-item{display:flex;align-items:center;gap:.4rem;padding:.3rem .5rem;border-radius:4px;cursor:pointer;font-size:.7rem;color:var(--text-muted);transition:all .12s;margin-bottom:.15rem}
+.gs-item:hover{background:var(--surface3);color:var(--text)}
+.gs-item.active{background:var(--accent-bg);color:var(--accent)}
+.gs-dot{width:8px;height:8px;border-radius:50%;flex-shrink:0}
+.gs-count{margin-left:auto;font-size:.65rem;color:var(--text-dim)}
+#graphCanvas{display:block;flex:1;cursor:grab;background:var(--surface)}
+#graphCanvas:active{cursor:grabbing}
+.graph-tooltip{display:none;position:absolute;background:var(--surface3);border:1px solid var(--border);border-radius:6px;padding:.5rem .7rem;font-size:.75rem;color:var(--text);pointer-events:none;z-index:10;max-width:280px;box-shadow:0 4px 12px rgba(0,0,0,.3)}
+
+/* Compliance flags */
+.c-flag{display:inline-block;font-size:.55rem;font-weight:700;padding:.05rem .25rem;border-radius:3px;margin-left:.2rem;vertical-align:middle}
+.c-flag.pii{background:var(--critical-bg);color:var(--critical)}
+.c-flag.fin{background:var(--warning-bg);color:var(--warning)}
+.c-flag.us{background:var(--blue-bg);color:var(--blue)}
 </style>
 </head>
 <body>
@@ -113,12 +206,11 @@ footer{text-align:center;color:var(--text-dim);font-size:.65rem;margin-top:2rem;
 
 {# ═══ STATS ═══ #}
 <div class="stats">
-  <div class="st"><div class="v">{{ total_assets }}</div><div class="l">AI Solutions</div></div>
-  <div class="st s-crit"><div class="v">{{ critical_count }}</div><div class="l">Critical</div></div>
-  <div class="st s-warn"><div class="v">{{ warning_count }}</div><div class="l">Warning</div></div>
-  <div class="st s-ok"><div class="v">{{ ok_count }}</div><div class="l">OK</div></div>
-  <div class="st"><div class="v">{{ categories | length }}</div><div class="l">Categories</div></div>
-  <div class="st"><div class="v">{{ data_egress | length }}</div><div class="l">Providers</div></div>
+  <a class="st st-link" href="#solTable"><div class="v">{{ total_assets }}</div><div class="l">AI Solutions</div></a>
+  <a class="st st-link" href="#solTable"><div class="v">{{ unique_count }}</div><div class="l">Unique</div></a>
+  <a class="st st-link s-warn" href="#sec-overlap"><div class="v">{{ overlap_count }}</div><div class="l">Overlapping</div></a>
+  <a class="st st-link" href="#sec-analytics"><div class="v">{{ people_count }}</div><div class="l">Contributors</div></a>
+  <a class="st st-link {% if at_risk_count > 0 %}s-crit{% endif %}" href="#solTable"><div class="v">{{ at_risk_count }}</div><div class="l">At Risk</div></a>
 </div>
 
 {% if total_assets > 0 %}
@@ -128,6 +220,134 @@ footer{text-align:center;color:var(--text-dim);font-size:.65rem;margin-top:2rem;
   {% if ok_count > 0 %}<div class="hm-o" style="flex:{{ ok_count }}"></div>{% endif %}
 </div>
 {% endif %}
+
+{# ═══ EXECUTIVE SUMMARY ═══ #}
+{% if exec_summary %}
+<div class="exec">
+  <h2>Executive Summary</h2>
+  <ul>
+    {% for point in exec_summary %}
+    <li>{{ point | md_bold | safe }}</li>
+    {% endfor %}
+  </ul>
+</div>
+{% endif %}
+
+{# ═══ GRAPH VISUALIZATION ═══ #}
+{% if graph_data %}
+<div class="sec">
+  <div class="sec-title">AI Solutions Map</div>
+  <div class="graph-wrap">
+    <div class="graph-top">
+      <div class="graph-tabs">
+        <button class="g-tab active" data-view="solutions">Solutions</button>
+        <button class="g-tab" data-view="tech">Tech Stack</button>
+        <button class="g-tab" data-view="people">People</button>
+      </div>
+    </div>
+    <div class="graph-body">
+      <div class="graph-sidebar" id="graphSidebar"></div>
+      <canvas id="graphCanvas"></canvas>
+    </div>
+    <div class="graph-tooltip" id="graphTooltip"></div>
+  </div>
+</div>
+{% endif %}
+
+{# ═══ ANALYTICS ═══ #}
+<details class="sec analytics-wrap" id="sec-analytics">
+  <summary class="sec-title" style="cursor:pointer">Analytics — Technology, Data &amp; People</summary>
+<div class="analytics">
+
+  {# Tech Stack Radar #}
+  {% if tech_radar %}
+  <div class="a-panel">
+    <h3>Technology Stack</h3>
+    {% for tech in tech_radar[:10] %}
+    <div class="bar-row">
+      <span class="bar-label">{{ tech.name }}</span>
+      <div class="bar-track"><div class="bar-fill b-accent" style="width:{{ (tech.count / tech_radar[0].count * 100) | int }}%">{{ tech.count }}</div></div>
+    </div>
+    {% endfor %}
+  </div>
+  {% endif %}
+
+  {# Data Sensitivity #}
+  {% if data_sensitivity %}
+  <div class="a-panel">
+    <h3>Data Types Processed</h3>
+    {% set max_ds = data_sensitivity[0].count if data_sensitivity else 1 %}
+    {% for ds in data_sensitivity[:10] %}
+    <div class="ds-row">
+      <span class="ds-type">{{ ds.type }}</span>
+      <div class="ds-bar" style="width:{{ (ds.count / max_ds * 100) | int }}%">
+        {% set ok_count_ds = ds.count - ds.warning - ds.critical %}
+        {% if ok_count_ds > 0 %}<div class="ds-ok" style="flex:{{ ok_count_ds }}"></div>{% endif %}
+        {% if ds.warning > 0 %}<div class="ds-warn" style="flex:{{ ds.warning }}"></div>{% endif %}
+        {% if ds.critical > 0 %}<div class="ds-crit" style="flex:{{ ds.critical }}"></div>{% endif %}
+      </div>
+      <span class="ds-total">{{ ds.count }}</span>
+    </div>
+    {% endfor %}
+  </div>
+  {% endif %}
+
+  {# Author Coverage #}
+  {% if author_coverage %}
+  <div class="a-panel">
+    <h3>Author Coverage</h3>
+    {% for auth in author_coverage[:8] %}
+    <div class="auth-row">
+      <span class="auth-name">{{ auth.name }}</span>
+      <div class="auth-bar"><div class="auth-fill {% if auth.is_spof %}spof{% endif %}" style="width:{{ auth.percentage }}%"></div></div>
+      <span class="auth-info">{{ auth.count }} ({{ auth.percentage }}%){% if auth.is_spof %}<span class="spof-badge">SPOF</span>{% endif %}</span>
+    </div>
+    {% endfor %}
+  </div>
+  {% endif %}
+
+  {# Overlap Detection #}
+  {% if overlaps %}
+  <div class="a-panel" id="sec-overlap">
+    <h3>Functional Overlap ({{ overlaps | length }} areas)</h3>
+    {% for ov in overlaps[:8] %}
+    <details class="overlap-card">
+      <summary>
+        <div class="oc-head">
+          <span class="oc-title">{{ ov.purpose }}</span>
+          <span class="oc-count">{{ ov.count }}× duplicated</span>
+        </div>
+      </summary>
+      <div class="oc-detail">
+        <div class="oc-meta">
+          {% if ov.authors %}Authors: {{ ov.authors | join(', ') }}{% endif %}
+        </div>
+        <div class="oc-techs" style="margin-bottom:.4rem">
+          Built on: {% for t in ov.tech_stacks[:6] %}<span class="tech-tag">{{ t }}</span>{% endfor %}
+        </div>
+        <div style="font-size:.7rem;color:var(--text-muted)">
+          <strong>Duplicated in:</strong>
+          {% for a in ov.assets[:6] %}
+          <div style="padding:.15rem 0;border-bottom:1px solid var(--border)">
+            {{ a.file_path.split(', ')[0] }}
+          </div>
+          {% endfor %}
+          {% if ov.assets | length > 6 %}<div style="color:var(--text-dim)">... +{{ ov.assets | length - 6 }} more</div>{% endif %}
+        </div>
+        <div style="font-size:.7rem;color:var(--accent);margin-top:.3rem">
+          Recommendation: Consolidate into a single shared implementation.
+        </div>
+      </div>
+    </details>
+    {% endfor %}
+    {% if overlaps | length > 8 %}
+    <div style="font-size:.7rem;color:var(--text-dim);padding:.3rem">... and {{ overlaps | length - 8 }} more areas</div>
+    {% endif %}
+  </div>
+  {% endif %}
+
+</div>
+</details>
 
 {# ═══ CATEGORIES ═══ #}
 {% if categories %}
@@ -142,11 +362,8 @@ footer{text-align:center;color:var(--text-dim);font-size:.65rem;margin-top:2rem;
     <div class="cat" data-cat="{{ cat_name }}">
       <div class="cat-count">{{ cat_assets | length }}</div>
       <div class="cat-name">{{ cat_name }}</div>
-      <div class="cat-sub">
-        {% set crit = cat_assets | selectattr('risk_score', 'ge', 0.7) | list | length %}
-        {% set warn = cat_assets | selectattr('risk_score', 'ge', 0.4) | rejectattr('risk_score', 'ge', 0.7) | list | length %}
-        {% if crit %}{{ crit }} critical{% endif %}{% if crit and warn %}, {% endif %}{% if warn %}{{ warn }} warning{% endif %}
-      </div>
+      {% set warn = cat_assets | selectattr('risk_score', 'ge', 0.4) | list | length %}
+      {% if warn %}<div class="cat-sub">{{ warn }} warning</div>{% endif %}
     </div>
     {% endfor %}
   </div>
@@ -204,7 +421,14 @@ footer{text-align:center;color:var(--text-dim);font-size:.65rem;margin-top:2rem;
     {% if insight.data_involved | length > 3 %}<span class="data-tag">+{{ insight.data_involved | length - 3 }}</span>{% endif %}
     {% else %}<span style="color:var(--text-dim);font-size:.7rem">—</span>{% endif %}
   </td>
-  <td><span class="badge {{ risk }}">{{ risk }}</span></td>
+  <td>
+    <span class="badge {{ risk }}">{{ risk }}</span>
+    {% if insight and insight.data_involved %}
+    {% if 'Personal data / PII' in insight.data_involved %}<span class="c-flag pii" title="Processes PII">PII</span>{% endif %}
+    {% if 'Financial data' in insight.data_involved %}<span class="c-flag fin" title="Processes financial data">FIN</span>{% endif %}
+    {% if insight.provider_profile and insight.provider_profile.data_residency and 'US' in insight.provider_profile.data_residency | join(' ') %}<span class="c-flag us" title="Data processed in US">US</span>{% endif %}
+    {% endif %}
+  </td>
 </tr>
 
 {# ─── DETAIL ROW ─── #}
@@ -286,11 +510,18 @@ footer{text-align:center;color:var(--text-dim);font-size:.65rem;margin-top:2rem;
     </div>
     {% endif %}
 
-    {# Files #}
+    {# Files + repo link #}
     <div class="detail-section">
-      <h4>Files ({{ asset.file_path.split(', ') | length }})</h4>
+      <h4>Files ({{ asset.file_path.split(', ') | length }})
+        {% if repo_urls.get(asset.repository) %}
+        <a href="{{ repo_urls[asset.repository] }}" target="_blank" style="font-weight:normal;font-size:.65rem;margin-left:.5rem">Open in GitHub ↗</a>
+        {% endif %}
+      </h4>
       <div style="font-size:.7rem;color:var(--text-dim)">
-        {% for fp in asset.file_path.split(', ')[:8] %}{{ fp }}<br>{% endfor %}
+        {% set base_url = repo_urls.get(asset.repository, '') %}
+        {% for fp in asset.file_path.split(', ')[:8] %}
+        {% if base_url %}<a href="{{ base_url }}/blob/main/{{ fp }}" target="_blank" style="color:var(--text-dim)">{{ fp }}</a>{% else %}{{ fp }}{% endif %}<br>
+        {% endfor %}
         {% if asset.file_path.split(', ') | length > 8 %}... +{{ asset.file_path.split(', ') | length - 8 }} more{% endif %}
       </div>
     </div>
@@ -311,12 +542,24 @@ footer{text-align:center;color:var(--text-dim);font-size:.65rem;margin-top:2rem;
 </div>
 
 <script>
+// Stats click — open analytics if needed
+document.querySelectorAll('.st-link').forEach(s=>{
+  s.addEventListener('click',e=>{
+    const href=s.getAttribute('href');
+    if(href==='#sec-analytics'||href==='#sec-overlap'){
+      const details=document.querySelector('.analytics-wrap');
+      if(details&&!details.open) details.open=true;
+    }
+  });
+});
+
 // Category filter
-document.querySelectorAll('.cat').forEach(c=>{
-  c.addEventListener('click',()=>{
+document.querySelectorAll('.cat').forEach(ci=>{
+  ci.addEventListener('click',()=>{
     document.querySelectorAll('.cat').forEach(x=>x.classList.remove('active'));
-    c.classList.add('active');
+    ci.classList.add('active');
     applyFilters();
+    document.getElementById('solTable')?.scrollIntoView({behavior:'smooth',block:'start'});
   });
 });
 
@@ -336,7 +579,8 @@ if(rs) rs.addEventListener('change',applyFilters);
 function applyFilters(){
   const risk=document.querySelector('.fb.active').dataset.filter;
   const repo=rs?rs.value:'all';
-  const cat=document.querySelector('.cat.active').dataset.cat;
+  const catEl=document.querySelector('.cat.active');
+  const cat=catEl?catEl.dataset.cat:'all';
   document.querySelectorAll('.sol-row').forEach(r=>{
     const mr=risk==='all'||r.dataset.risk===risk;
     const mre=repo==='all'||r.dataset.repo===repo;
@@ -357,12 +601,267 @@ document.querySelectorAll('.sol-row').forEach(r=>{
     const dr=r.nextElementSibling;
     if(dr&&dr.classList.contains('detail-row')){
       const show=!dr.classList.contains('show');
-      // Close all others
       document.querySelectorAll('.detail-row.show').forEach(d=>{d.classList.remove('show');d.previousElementSibling.classList.remove('expanded')});
       if(show){dr.classList.add('show');r.classList.add('expanded')}
     }
   });
 });
+
+// ═══════════════════════════════════════════════════════════════
+// FORCE-DIRECTED GRAPH ENGINE
+// ═══════════════════════════════════════════════════════════════
+{% if graph_data %}
+(function(){
+const graphData = {
+  solutions: {{ graph_data.solutions | safe }},
+  tech: {{ graph_data.tech | safe }},
+  people: {{ graph_data.people | safe }}
+};
+
+const canvas = document.getElementById('graphCanvas');
+if(!canvas) return;
+const c = canvas.getContext('2d');
+const tooltip = document.getElementById('graphTooltip');
+const sidebar = document.getElementById('graphSidebar');
+
+let W, H, dpr;
+function resize(){
+  dpr = window.devicePixelRatio || 1;
+  const parent = canvas.parentElement;
+  const sidebarW = document.getElementById('graphSidebar').offsetWidth || 180;
+  W = parent.clientWidth - sidebarW;
+  H = Math.max(450, Math.min(600, window.innerHeight * 0.5));
+  canvas.width = W * dpr; canvas.height = H * dpr;
+  canvas.style.width = W + 'px';
+  canvas.style.height = H + 'px';
+  c.setTransform(dpr, 0, 0, dpr, 0, 0);
+}
+resize();
+
+let currentView = 'solutions';
+let nodes = [], edges = [], activeGroup = null;
+let dragging = null, hovered = null;
+
+function loadView(view) {
+  currentView = view;
+  activeGroup = null;
+  window._groupTargets = null;
+  const data = graphData[view];
+  nodes = data.nodes.map(n => ({
+    ...n,
+    x: W/2 + (Math.random()-0.5) * W * 0.7,
+    y: H/2 + (Math.random()-0.5) * H * 0.7,
+    vx: 0, vy: 0, visible: true,
+  }));
+  edges = data.edges.map(e => ({
+    source: nodes.find(n=>n.id===e.from),
+    target: nodes.find(n=>n.id===e.to),
+    type: e.type || '',
+  })).filter(e => e.source && e.target);
+
+  // Build sidebar
+  const groups = {};
+  nodes.forEach(n => {
+    const g = n.is_tech ? 'tech' : n.is_author ? 'author' : n.group;
+    if(!groups[g]) groups[g] = {color: n.color, count: 0};
+    groups[g].count++;
+  });
+  sidebar.innerHTML = `<div class="gs-item active" data-group="all"><span class="gs-dot" style="background:var(--text-muted)"></span>All<span class="gs-count">${nodes.length}</span></div>` +
+    Object.entries(groups).map(([g,v]) =>
+      `<div class="gs-item" data-group="${g}"><span class="gs-dot" style="background:${v.color}"></span>${g}<span class="gs-count">${v.count}</span></div>`
+    ).join('');
+
+  sidebar.querySelectorAll('.gs-item').forEach(item => {
+    item.addEventListener('click', () => {
+      sidebar.querySelectorAll('.gs-item').forEach(x=>x.classList.remove('active'));
+      item.classList.add('active');
+      const grp = item.dataset.group;
+      activeGroup = grp === 'all' ? null : grp;
+      nodes.forEach(n => {
+        const ng = n.is_tech ? 'tech' : n.is_author ? 'author' : n.group;
+        n.visible = !activeGroup || ng === activeGroup;
+      });
+      draw();
+    });
+  });
+
+  simulate();
+}
+
+let simTimer;
+function simulate() {
+  if(simTimer) cancelAnimationFrame(simTimer);
+  let iter = 0;
+  const maxIter = 400;
+  const pad = 30;
+
+  function tick() {
+    const alpha = Math.max(0.005, 1 - iter / maxIter);
+
+    // Repulsion
+    for(let i=0;i<nodes.length;i++){
+      for(let j=i+1;j<nodes.length;j++){
+        let dx=nodes[j].x-nodes[i].x, dy=nodes[j].y-nodes[i].y;
+        let dist=Math.sqrt(dx*dx+dy*dy)||1;
+        let force=alpha*2500/(dist*dist);
+        let fx=dx/dist*force, fy=dy/dist*force;
+        nodes[i].vx-=fx; nodes[i].vy-=fy;
+        nodes[j].vx+=fx; nodes[j].vy+=fy;
+      }
+    }
+
+    // Attraction (edges) — longer ideal distance
+    edges.forEach(e=>{
+      let dx=e.target.x-e.source.x, dy=e.target.y-e.source.y;
+      let dist=Math.sqrt(dx*dx+dy*dy)||1;
+      let force=alpha*(dist-120)*0.003;
+      let fx=dx/dist*force, fy=dy/dist*force;
+      e.source.vx+=fx; e.source.vy+=fy;
+      e.target.vx-=fx; e.target.vy-=fy;
+    });
+
+    // Gentle center gravity
+    nodes.forEach(n=>{
+      n.vx+=(W/2-n.x)*alpha*0.005;
+      n.vy+=(H/2-n.y)*alpha*0.005;
+    });
+
+    // Group clustering — assign fixed sector positions per category
+    if(currentView==='solutions'){
+      if(!window._groupTargets){
+        const groups = [...new Set(nodes.map(n=>n.group))];
+        window._groupTargets = {};
+        const cx=W/2, cy=H/2, radius=Math.min(W*0.42, H*0.38);
+        groups.forEach((g,i) => {
+          const angle = (i / groups.length) * Math.PI * 2 - Math.PI/2;
+          window._groupTargets[g] = {
+            x: cx + Math.cos(angle) * radius,
+            y: cy + Math.sin(angle) * radius,
+          };
+        });
+      }
+      nodes.forEach(n=>{
+        const t=window._groupTargets[n.group];
+        if(t){
+          n.vx+=(t.x-n.x)*alpha*0.06;
+          n.vy+=(t.y-n.y)*alpha*0.06;
+        }
+      });
+    }
+
+    // Apply velocity
+    nodes.forEach(n=>{
+      if(n===dragging) return;
+      n.vx*=0.55; n.vy*=0.55;
+      n.x+=n.vx; n.y+=n.vy;
+      n.x=Math.max(pad+n.size,Math.min(W-pad-n.size,n.x));
+      n.y=Math.max(pad+n.size,Math.min(H-pad-n.size,n.y));
+    });
+
+    draw();
+    iter++;
+    if(iter<maxIter) simTimer=requestAnimationFrame(tick);
+  }
+  tick();
+}
+
+function draw(){
+  c.clearRect(0,0,W,H);
+
+  // Edges
+  edges.forEach(e=>{
+    if(!e.source.visible && !e.target.visible) return;
+    const dimmed = !e.source.visible || !e.target.visible;
+    c.beginPath();
+    c.moveTo(e.source.x,e.source.y);
+    c.lineTo(e.target.x,e.target.y);
+    c.lineWidth = e.type==='overlap' ? 1 : 0.5;
+    c.strokeStyle = dimmed ? 'rgba(99,102,241,0.04)' :
+      e.type==='overlap' ? 'rgba(245,158,11,0.35)' : 'rgba(99,102,241,0.12)';
+    c.stroke();
+  });
+
+  // Nodes
+  nodes.forEach(n=>{
+    const dimmed = !n.visible;
+    const r = dimmed ? n.size * 0.5 : n.size;
+    const alpha = dimmed ? 0.15 : 1;
+
+    c.beginPath();
+    c.arc(n.x, n.y, r, 0, Math.PI*2);
+    c.globalAlpha = alpha;
+    c.fillStyle = n===hovered ? '#fff' : n.color;
+    c.fill();
+    if(!dimmed && n.risk==='critical'){c.strokeStyle='#ef4444';c.lineWidth=2;c.stroke()}
+    else if(!dimmed && n.risk==='warning'){c.strokeStyle='#f59e0b';c.lineWidth=1.5;c.stroke()}
+    c.globalAlpha = 1;
+
+    // Labels
+    if(n.visible && (n.size >= 6 || n.is_tech || n.is_author || n===hovered)){
+      c.fillStyle = dimmed ? 'rgba(225,228,237,0.2)' : 'rgba(225,228,237,0.85)';
+      const fontSize = n.is_tech || n.is_author ? 11 : Math.max(8, Math.min(10, n.size));
+      c.font = `${n.is_tech||n.is_author?'bold ':''}${fontSize}px -apple-system,system-ui,sans-serif`;
+      c.textAlign = 'center';
+      c.fillText(n.label, n.x, n.y + r + 11);
+    }
+  });
+
+  // Draw cluster labels on background for Solutions view
+  if(currentView==='solutions' && window._groupTargets){
+    c.textAlign = 'center';
+    Object.entries(window._groupTargets).forEach(([group, pos]) => {
+      if(activeGroup && activeGroup !== group) return;
+      c.font = 'bold 13px -apple-system,system-ui,sans-serif';
+      c.fillStyle = 'rgba(225,228,237,0.12)';
+      c.fillText(group, pos.x, pos.y - Math.min(W,H)*0.12);
+    });
+  }
+}
+
+// Interaction
+canvas.addEventListener('mousemove', e=>{
+  const rect = canvas.getBoundingClientRect();
+  const mx = e.clientX-rect.left, my = e.clientY-rect.top;
+  if(dragging){dragging.x=mx;dragging.y=my;draw();return}
+  let found = null;
+  for(let n of nodes){
+    if(!n.visible) continue;
+    const dx=mx-n.x, dy=my-n.y;
+    if(dx*dx+dy*dy < (n.size+6)*(n.size+6)){found=n;break}
+  }
+  if(found !== hovered){
+    hovered = found;
+    canvas.style.cursor = found ? 'pointer' : 'grab';
+    if(found){
+      tooltip.style.display = 'block';
+      const tx = Math.min(found.x+found.size+10, W-200);
+      tooltip.style.left = tx+'px';
+      tooltip.style.top = (found.y-10)+'px';
+      tooltip.innerHTML = `<strong>${found.label}</strong><br><span style="color:var(--text-muted);font-size:.7rem">${found.group}</span>`;
+    } else {
+      tooltip.style.display = 'none';
+    }
+    draw();
+  }
+});
+
+canvas.addEventListener('mousedown',()=>{if(hovered){dragging=hovered;canvas.style.cursor='grabbing'}});
+canvas.addEventListener('mouseup',()=>{dragging=null;canvas.style.cursor=hovered?'pointer':'grab'});
+canvas.addEventListener('mouseleave',()=>{dragging=null;hovered=null;tooltip.style.display='none';draw()});
+
+// Tab switching
+document.querySelectorAll('.g-tab').forEach(t=>{
+  t.addEventListener('click',()=>{
+    document.querySelectorAll('.g-tab').forEach(x=>x.classList.remove('active'));
+    t.classList.add('active');
+    resize();
+    loadView(t.dataset.view);
+  });
+});
+
+loadView('solutions');
+})();
+{% endif %}
 </script>
 </body>
 </html>
