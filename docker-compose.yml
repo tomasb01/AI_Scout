@@ -1,0 +1,24 @@
+services:
+  ollama:
+    image: ollama/ollama:latest
+    container_name: ai-scout-ollama
+    ports:
+      - "11434:11434"
+    volumes:
+      - ollama_data:/root/.ollama
+
+  aiscout:
+    build: .
+    container_name: ai-scout
+    depends_on:
+      - ollama
+    environment:
+      - AISCOUT_LLM_URL=http://ollama:11434
+    volumes:
+      - ./config:/app/config
+      - ./reports:/app/reports
+    entrypoint: ["aiscout"]
+    command: ["scan", "--help"]
+
+volumes:
+  ollama_data:

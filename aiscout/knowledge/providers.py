@@ -1,0 +1,270 @@
+"""Provider Knowledge Base — static data about AI providers and frameworks."""
+
+from __future__ import annotations
+
+from dataclasses import dataclass
+
+
+@dataclass(frozen=True)
+class ProviderProfile:
+    """Public knowledge about an AI provider or framework."""
+
+    name: str
+    display_name: str
+    category: str  # llm_api, embedding_db, framework, local_runtime
+    description: str
+    vendor: str
+    data_residency: list[str]  # regions where data is processed
+    training_policy: str  # how the vendor uses customer data
+    certifications: list[str]
+    free_tier_risk: str  # risk note for free/personal tier
+    enterprise_note: str  # what changes with enterprise agreement
+    docs_url: str
+
+
+# ── Provider profiles ─────────────────────────────────────────────────────
+
+PROVIDERS: dict[str, ProviderProfile] = {
+    "openai": ProviderProfile(
+        name="openai",
+        display_name="OpenAI",
+        category="llm_api",
+        description="Large language model API (GPT-4, GPT-4o, o3). Used for text generation, code completion, embeddings, and vision tasks.",
+        vendor="OpenAI, Inc.",
+        data_residency=["US"],
+        training_policy="Free tier: data may be used for model improvement. Paid API: data not used for training (since March 2023). Enterprise: contractual opt-out + DPA.",
+        certifications=["SOC 2 Type II", "GDPR DPA available"],
+        free_tier_risk="Data on free/personal ChatGPT tier may be used for model training. API keys on free tier have limited protections.",
+        enterprise_note="Enterprise API with DPA, data not used for training, dedicated capacity available.",
+        docs_url="https://platform.openai.com/docs",
+    ),
+    "anthropic": ProviderProfile(
+        name="anthropic",
+        display_name="Anthropic (Claude)",
+        category="llm_api",
+        description="Claude model family API. Used for text generation, analysis, code, and agentic tasks.",
+        vendor="Anthropic, PBC",
+        data_residency=["US"],
+        training_policy="API: data not used for training by default. Free tier (claude.ai): data may be used. Enterprise: contractual guarantees.",
+        certifications=["SOC 2 Type II", "HIPAA eligible", "GDPR DPA available"],
+        free_tier_risk="Personal claude.ai usage may contribute data to training. API usage does not by default.",
+        enterprise_note="Enterprise plan with DPA, SSO, admin controls, no training on data.",
+        docs_url="https://docs.anthropic.com",
+    ),
+    "google_ai": ProviderProfile(
+        name="google_ai",
+        display_name="Google AI (Gemini)",
+        category="llm_api",
+        description="Gemini model API via Google AI Studio or Vertex AI. Used for text, code, vision, and multimodal tasks.",
+        vendor="Google LLC",
+        data_residency=["US", "EU", "multi-region"],
+        training_policy="AI Studio free tier: data may be used for improvement. Vertex AI: data not used for training. Enterprise: full contractual control.",
+        certifications=["SOC 1/2/3", "ISO 27001", "HIPAA", "FedRAMP", "GDPR"],
+        free_tier_risk="Google AI Studio free tier processes data with fewer guarantees than Vertex AI.",
+        enterprise_note="Vertex AI with data residency controls, VPC-SC, CMEK, enterprise DPA.",
+        docs_url="https://ai.google.dev/docs",
+    ),
+    "mistral": ProviderProfile(
+        name="mistral",
+        display_name="Mistral AI",
+        category="llm_api",
+        description="Mistral model API (Mistral Large, Codestral). European AI provider, used for text and code generation.",
+        vendor="Mistral AI (France)",
+        data_residency=["EU (France)", "US"],
+        training_policy="API: data not used for training. Self-hosted models available for full control.",
+        certifications=["GDPR compliant", "EU-based"],
+        free_tier_risk="Free tier API has rate limits but same data policy as paid.",
+        enterprise_note="EU data residency by default. Self-hosted deployment option. Enterprise contracts available.",
+        docs_url="https://docs.mistral.ai",
+    ),
+    "cohere": ProviderProfile(
+        name="cohere",
+        display_name="Cohere",
+        category="llm_api",
+        description="Enterprise NLP API. Used for text generation, embeddings, reranking, and RAG.",
+        vendor="Cohere Inc.",
+        data_residency=["US", "EU", "multi-region"],
+        training_policy="API: customer data not used for training. Private deployments available.",
+        certifications=["SOC 2 Type II", "GDPR DPA available"],
+        free_tier_risk="Trial tier has same data policy but limited SLA.",
+        enterprise_note="Private cloud deployment, data residency control, enterprise DPA.",
+        docs_url="https://docs.cohere.com",
+    ),
+    "huggingface": ProviderProfile(
+        name="huggingface",
+        display_name="Hugging Face",
+        category="framework",
+        description="ML model hub and framework (Transformers, Diffusers). Used for running open-source models, fine-tuning, and inference.",
+        vendor="Hugging Face, Inc.",
+        data_residency=["US (Inference API)", "self-hosted"],
+        training_policy="Inference API: data not stored beyond request. Models can be self-hosted for full control.",
+        certifications=["SOC 2 Type II"],
+        free_tier_risk="Free Inference API has rate limits. Self-hosted models have zero data exposure.",
+        enterprise_note="Enterprise Hub with SSO, private models, dedicated inference endpoints.",
+        docs_url="https://huggingface.co/docs",
+    ),
+    "langchain": ProviderProfile(
+        name="langchain",
+        display_name="LangChain",
+        category="framework",
+        description="LLM application framework for building chains, agents, and RAG pipelines. Orchestration layer — data flows to whichever LLM provider is configured.",
+        vendor="LangChain, Inc.",
+        data_residency=["depends on configured LLM provider"],
+        training_policy="Framework only — no data processing. Data residency depends on the underlying LLM/vector store.",
+        certifications=[],
+        free_tier_risk="LangChain itself doesn't process data, but it routes data to configured providers. Risk depends on provider configuration.",
+        enterprise_note="LangSmith (observability) available as cloud or self-hosted.",
+        docs_url="https://docs.langchain.com",
+    ),
+    "llamaindex": ProviderProfile(
+        name="llamaindex",
+        display_name="LlamaIndex",
+        category="framework",
+        description="Data framework for LLM applications. Used for indexing, RAG, and data connectors.",
+        vendor="LlamaIndex (Run.ai)",
+        data_residency=["depends on configured LLM provider"],
+        training_policy="Framework only — no data processing by LlamaIndex itself.",
+        certifications=[],
+        free_tier_risk="No direct data risk from framework. Risk depends on configured LLM and vector store.",
+        enterprise_note="LlamaCloud available for managed indexing and retrieval.",
+        docs_url="https://docs.llamaindex.ai",
+    ),
+    "ollama": ProviderProfile(
+        name="ollama",
+        display_name="Ollama",
+        category="local_runtime",
+        description="Local LLM runtime. Runs open-source models (Llama, Mistral, Qwen) entirely on local hardware. Zero data egress.",
+        vendor="Ollama (open-source)",
+        data_residency=["local — no data leaves the machine"],
+        training_policy="Fully local. No data is sent anywhere. No telemetry.",
+        certifications=[],
+        free_tier_risk="No data risk — everything runs locally. Risk is limited to local security posture.",
+        enterprise_note="Self-hosted by design. No enterprise tier needed — full control out of the box.",
+        docs_url="https://ollama.com",
+    ),
+    "chromadb": ProviderProfile(
+        name="chromadb",
+        display_name="ChromaDB",
+        category="embedding_db",
+        description="Open-source vector database for embeddings. Used for similarity search and RAG pipelines.",
+        vendor="Chroma (open-source)",
+        data_residency=["local / self-hosted", "Chroma Cloud (US)"],
+        training_policy="Self-hosted: no data leaves. Cloud: standard SaaS terms.",
+        certifications=[],
+        free_tier_risk="Self-hosted mode has zero data exposure. Cloud mode sends embeddings to Chroma servers.",
+        enterprise_note="Can be fully self-hosted. Cloud option available for managed service.",
+        docs_url="https://docs.trychroma.com",
+    ),
+    "pinecone": ProviderProfile(
+        name="pinecone",
+        display_name="Pinecone",
+        category="embedding_db",
+        description="Managed vector database. Used for similarity search, RAG, and recommendation systems.",
+        vendor="Pinecone Systems, Inc.",
+        data_residency=["US", "EU (GCP)", "AWS regions"],
+        training_policy="Customer data not used for training. Data stored in customer-selected region.",
+        certifications=["SOC 2 Type II", "GDPR DPA available"],
+        free_tier_risk="Free tier stores embeddings on Pinecone servers. Embeddings can contain encoded sensitive data.",
+        enterprise_note="Dedicated deployment, private endpoints, data residency selection.",
+        docs_url="https://docs.pinecone.io",
+    ),
+    "qdrant": ProviderProfile(
+        name="qdrant",
+        display_name="Qdrant",
+        category="embedding_db",
+        description="Vector database for similarity search. Available as self-hosted or managed cloud.",
+        vendor="Qdrant Solutions GmbH (Germany)",
+        data_residency=["EU (self-hosted/cloud)", "US", "self-hosted anywhere"],
+        training_policy="Self-hosted: full control. Cloud: data not used for training.",
+        certifications=["GDPR compliant", "EU-based company"],
+        free_tier_risk="Self-hosted has zero data exposure. Cloud free tier stores data on Qdrant servers.",
+        enterprise_note="EU-based company. Self-hosted option. Enterprise cloud with dedicated clusters.",
+        docs_url="https://qdrant.tech/documentation",
+    ),
+    "weaviate": ProviderProfile(
+        name="weaviate",
+        display_name="Weaviate",
+        category="embedding_db",
+        description="Vector database with built-in vectorization. Used for semantic search and RAG.",
+        vendor="Weaviate B.V. (Netherlands)",
+        data_residency=["EU (self-hosted/cloud)", "US", "self-hosted anywhere"],
+        training_policy="Self-hosted: full control. Cloud: data not used for training.",
+        certifications=["SOC 2 Type II", "GDPR compliant", "EU-based company"],
+        free_tier_risk="Self-hosted has zero data exposure. Sandbox cloud has limited guarantees.",
+        enterprise_note="EU-based company. Enterprise cloud with SLA, dedicated clusters, BYOC.",
+        docs_url="https://weaviate.io/developers/weaviate",
+    ),
+    "replicate": ProviderProfile(
+        name="replicate",
+        display_name="Replicate",
+        category="llm_api",
+        description="Cloud platform for running ML models. Used for inference of open-source models (Llama, Stable Diffusion, etc.).",
+        vendor="Replicate, Inc.",
+        data_residency=["US"],
+        training_policy="Input data deleted after prediction. Not used for training.",
+        certifications=["SOC 2 Type II"],
+        free_tier_risk="Free tier processes data on Replicate servers in US.",
+        enterprise_note="Enterprise plans with dedicated hardware and priority support.",
+        docs_url="https://replicate.com/docs",
+    ),
+    "together": ProviderProfile(
+        name="together",
+        display_name="Together AI",
+        category="llm_api",
+        description="Cloud inference platform for open-source models. Used for fast LLM inference and fine-tuning.",
+        vendor="Together AI, Inc.",
+        data_residency=["US"],
+        training_policy="Data not used for training. Inputs/outputs not stored beyond request.",
+        certifications=["SOC 2 Type II"],
+        free_tier_risk="Free credits process data on Together servers.",
+        enterprise_note="Dedicated instances, VPC deployment option, enterprise contracts.",
+        docs_url="https://docs.together.ai",
+    ),
+    "groq": ProviderProfile(
+        name="groq",
+        display_name="Groq",
+        category="llm_api",
+        description="Ultra-fast LLM inference on custom LPU hardware. Used for low-latency AI applications.",
+        vendor="Groq, Inc.",
+        data_residency=["US"],
+        training_policy="Data not used for training. Not stored beyond request processing.",
+        certifications=["SOC 2 Type II"],
+        free_tier_risk="Free tier has rate limits. Data processed on Groq servers in US.",
+        enterprise_note="Enterprise plans with higher limits, SLA, and dedicated support.",
+        docs_url="https://console.groq.com/docs",
+    ),
+    "aws_bedrock": ProviderProfile(
+        name="aws_bedrock",
+        display_name="AWS Bedrock",
+        category="llm_api",
+        description="Managed LLM service on AWS. Access to Claude, Llama, Mistral, and other models within AWS infrastructure.",
+        vendor="Amazon Web Services",
+        data_residency=["customer-selected AWS region"],
+        training_policy="Data not used for training. Stays within customer's AWS account and region.",
+        certifications=["SOC 1/2/3", "ISO 27001", "HIPAA", "FedRAMP", "GDPR", "PCI DSS"],
+        free_tier_risk="Same data protections as paid tier. Data stays in customer's AWS account.",
+        enterprise_note="Full AWS compliance framework. VPC, PrivateLink, CMEK, CloudTrail logging.",
+        docs_url="https://docs.aws.amazon.com/bedrock",
+    ),
+}
+
+# ── Fallback for unknown providers ────────────────────────────────────────
+
+UNKNOWN_PROVIDER = ProviderProfile(
+    name="unknown",
+    display_name="Unknown Provider",
+    category="unknown",
+    description="Unrecognized AI provider or framework.",
+    vendor="Unknown",
+    data_residency=["unknown"],
+    training_policy="Unknown — review provider documentation.",
+    certifications=[],
+    free_tier_risk="Unknown data handling policy. Review before use with sensitive data.",
+    enterprise_note="Research this provider's enterprise offering and data policies.",
+    docs_url="",
+)
+
+
+def get_provider(name: str) -> ProviderProfile:
+    """Look up a provider profile by name. Returns UNKNOWN_PROVIDER for unrecognized names."""
+    return PROVIDERS.get(name, UNKNOWN_PROVIDER)
