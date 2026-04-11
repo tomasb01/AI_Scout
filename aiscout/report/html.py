@@ -145,7 +145,19 @@ class ReportGenerator:
             "data_egress": data_egress_sorted,
             "all_authors": all_authors,
             "repo_details": repo_details,
+            "categories": self._group_by_category(all_assets),
         }
+
+    def _group_by_category(self, assets: list[AIAsset]) -> dict[str, list[AIAsset]]:
+        """Group assets by category for dashboard display."""
+        from collections import defaultdict
+        cats: dict[str, list[AIAsset]] = defaultdict(list)
+        for asset in assets:
+            insight = self.insights.get(asset.id) if self.insights else None
+            cat = insight.category if insight and insight.category else "Other AI Solutions"
+            cats[cat].append(asset)
+        # Sort categories by count descending
+        return dict(sorted(cats.items(), key=lambda x: -len(x[1])))
 
     @staticmethod
     def _get_risk_class(score: float) -> str:

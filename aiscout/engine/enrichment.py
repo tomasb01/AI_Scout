@@ -22,6 +22,10 @@ class AssetInsight:
     """Enriched insight for an AI asset — summary, risk reasoning, recommendations."""
 
     summary: str
+    solution_name: str = ""  # human-readable name derived from code
+    category: str = ""  # chatbot, rag, fine-tuning, agent, script, api, etc.
+    tech_stack: list[str] = field(default_factory=list)  # all technologies used
+    data_involved: list[str] = field(default_factory=list)  # what data is processed
     risk_reasons: list[RiskReason] = field(default_factory=list)
     recommendations: list[str] = field(default_factory=list)
     provider_profile: ProviderProfile | None = None
@@ -34,12 +38,20 @@ def enrich_asset(asset: AIAsset) -> AssetInsight:
     summary = _build_summary(asset, provider)
     risk_reasons = _build_risk_reasons(asset, provider)
     recommendations = _build_recommendations(asset, provider, risk_reasons)
+    tech_stack = _extract_tech_stack(asset)
+    data_involved = _extract_data_involved(asset)
+    category = _classify_category(asset)
+    solution_name = _derive_solution_display_name(asset, category)
 
     # Recalculate risk score based on reasons
     asset.risk_score = _calculate_risk_score(risk_reasons)
 
     return AssetInsight(
         summary=summary,
+        solution_name=solution_name,
+        category=category,
+        tech_stack=tech_stack,
+        data_involved=data_involved,
         risk_reasons=risk_reasons,
         recommendations=recommendations,
         provider_profile=provider,
@@ -55,36 +67,49 @@ def enrich_assets(assets: list[AIAsset]) -> dict[str, AssetInsight]:
 
 
 def _build_summary(asset: AIAsset, provider: ProviderProfile | None) -> str:
-    """Generate a summary focused on WHAT the solution does, not what the provider is."""
-    # Infer purpose from file paths, imports, and directory structure
+    """Generate a summary focused on WHAT the solution does, not what the provider is.
+
+    Priority: purpose from code > directory context > provider name.
+    Provider goes into tech_stack, not into summary.
+    """
     purpose = _infer_purpose(asset)
-    provider_name = provider.display_name if provider else "unknown provider"
 
-    # Build the summary: what it does + what it's built on
     if purpose:
-        summary = f"{purpose} Built on {provider_name}."
-    elif provider:
-        summary = f"AI solution using {provider_name}."
-    else:
-        summary = "AI integration detected."
+        return purpose
 
-    # Add key stats
-    files = asset.file_path.split(", ") if asset.file_path else []
-    import_count = sum(1 for f in asset.raw_findings if f.type == FindingType.IMPORT_DETECTED)
-    key_count = sum(1 for f in asset.raw_findings if f.type == FindingType.API_KEY_DETECTED)
+    # Fallback: directory context + provider
+    dir_context = _get_dir_context(asset)
+    provider_name = provider.display_name if provider else "unknown"
+    if dir_context:
+        return f"{dir_context} AI solution using {provider_name}."
+    return f"AI solution using {provider_name}."
 
-    stats = []
-    if len(files) > 0:
-        stats.append(f"{len(files)} file{'s' if len(files) != 1 else ''}")
-    if import_count:
-        stats.append(f"{import_count} import{'s' if import_count != 1 else ''}")
-    if key_count:
-        stats.append(f"{key_count} API key{'s' if key_count != 1 else ''} in code")
 
-    if stats:
-        summary += f" ({', '.join(stats)})"
+def _get_dir_context(asset: AIAsset) -> str:
+    """Extract meaningful context from directory path."""
+    if not asset.file_path:
+        return ""
 
-    return summary
+    from aiscout.scanners.git_scanner import _clean_dir_name
+    first_file = asset.file_path.split(", ")[0]
+    parts = first_file.split("/")
+
+    # Build context from directory hierarchy (skip leaf filename)
+    dir_parts = parts[:-1] if len(parts) > 1 else []
+    if not dir_parts:
+        return ""
+
+    # Clean and filter directory names
+    meaningful = []
+    for p in dir_parts:
+        cleaned = _clean_dir_name(p)
+        if cleaned and cleaned.lower() not in ("old", "archive", "src", "lib"):
+            meaningful.append(cleaned)
+
+    if meaningful:
+        return " > ".join(meaningful) + "."
+
+    return ""
 
 
 def _infer_purpose(asset: AIAsset) -> str:
@@ -100,7 +125,7 @@ def _infer_purpose(asset: AIAsset) -> str:
 
 
 def _infer_from_code_contexts(asset: AIAsset) -> str:
-    """Infer purpose from extracted code contexts — functions, prompts, API calls."""
+    """Infer purpose from extracted code contexts — functions, prompts, API calls, README."""
     parts = []
 
     # Collect all context data across files
@@ -110,6 +135,8 @@ def _infer_from_code_contexts(asset: AIAsset) -> str:
     all_sources = []
     all_sinks = []
     all_env_vars = []
+    all_readmes = []
+    all_docstrings = []
 
     for ctx in asset.code_contexts:
         all_functions.extend(ctx.functions)
@@ -118,15 +145,39 @@ def _infer_from_code_contexts(asset: AIAsset) -> str:
         all_sources.extend(ctx.data_sources)
         all_sinks.extend(ctx.data_sinks)
         all_env_vars.extend(ctx.env_vars)
+        # README content
+        if ctx.language == "markdown" and ctx.raw_snippets:
+            all_readmes.extend(ctx.raw_snippets)
+        # Collect docstrings from functions
+        for func in ctx.functions:
+            if func.get("docstring"):
+                all_docstrings.append(func["docstring"])
+        for cls in ctx.classes:
+            if cls.get("docstring"):
+                all_docstrings.append(cls["docstring"])
 
-    # ── Prompts tell us the most about purpose ──
+    # ── Priority 1: README content ──
+    if all_readmes:
+        readme_text = all_readmes[0]
+        # Extract first meaningful paragraph from README
+        lines = [l.strip() for l in readme_text.split("\n") if l.strip()]
+        # Skip title lines (# headings)
+        content_lines = [l for l in lines if not l.startswith("#") and len(l) > 20]
+        if content_lines:
+            parts.append(content_lines[0][:200] + ("." if not content_lines[0].endswith(".") else ""))
+
+    # ── Prompts tell us about purpose ──
     if all_prompts:
-        # Use the first/longest prompt to describe purpose
         best_prompt = max(all_prompts, key=len)
-        # Extract first sentence or "You are X" pattern
         purpose_from_prompt = _extract_purpose_from_prompt(best_prompt)
         if purpose_from_prompt:
             parts.append(purpose_from_prompt)
+
+    # ── Docstrings describe purpose directly ──
+    if all_docstrings and not parts:
+        best_doc = max(all_docstrings, key=len)
+        if len(best_doc) > 15:
+            parts.append(best_doc[:200] + ("." if not best_doc.endswith(".") else ""))
 
     # ── Functions with decorators (Flask routes, FastAPI endpoints) ──
     endpoints = []
@@ -137,8 +188,18 @@ def _infer_from_code_contexts(asset: AIAsset) -> str:
                 args_str = ", ".join(func.get("args", []))
                 endpoints.append(f"{func['name']}({args_str})")
 
-    if endpoints and not parts:
-        parts.append(f"API service with endpoints: {', '.join(endpoints[:5])}.")
+    if endpoints:
+        parts.append(f"API endpoints: {', '.join(endpoints[:5])}.")
+
+    # ── Key function names hint at purpose ──
+    meaningful_funcs = [
+        f for f in all_functions
+        if f["name"] not in ("__init__", "main", "setup", "config", "run")
+        and not f["name"].startswith("_")
+    ]
+    if meaningful_funcs and len(parts) < 2:
+        func_names = [f["name"] for f in meaningful_funcs[:6]]
+        parts.append(f"Key functions: {', '.join(func_names)}.")
 
     # ── Data flow description ──
     source_types = set()
@@ -217,21 +278,38 @@ def _infer_from_code_contexts(asset: AIAsset) -> str:
 
 
 def _extract_purpose_from_prompt(prompt_text: str) -> str:
-    """Extract purpose description from a system prompt."""
+    """Extract what the AI solution DOES from a system prompt.
+
+    Skips generic role descriptions like "You are a helpful assistant"
+    and looks for the actual task/purpose instructions.
+    """
     import re
     text = prompt_text.strip()
+    sentences = [s.strip() for s in re.split(r'[.!\n]', text) if s.strip()]
 
-    # "You are X" pattern
-    match = re.match(r"(?:You are|You're|Act as|I am|I'm)\s+(.+?)(?:\.|$)", text, re.IGNORECASE)
-    if match:
-        role = match.group(1).strip()
-        if len(role) > 10:
-            return f"AI assistant: \"{role[:150]}\"."
+    # Skip the "You are X" preamble if generic, use the NEXT sentence(s)
+    useful_sentences = []
+    for s in sentences:
+        # Skip generic role statements
+        if re.match(r"(?:You are|You're|I am|Act as)\s+(?:a |an )", s, re.IGNORECASE):
+            role = re.sub(r"(?:You are|You're|I am|Act as)\s+", "", s, flags=re.IGNORECASE).strip()
+            if not _is_generic_role(role) and len(role) > 15:
+                useful_sentences.append(f'Role: "{role[:120]}"')
+            continue
+        # Skip very short sentences
+        if len(s) < 10:
+            continue
+        # Skip meta-instructions to the LLM
+        if any(kw in s.lower() for kw in ("respond in json", "return json", "format your", "do not")):
+            continue
+        useful_sentences.append(s[:150])
 
-    # First sentence if it's descriptive enough
-    first_sentence = text.split(".")[0].strip()
-    if 15 < len(first_sentence) < 200:
-        return f"System prompt: \"{first_sentence}\"."
+    if useful_sentences:
+        return ". ".join(useful_sentences[:2]) + "."
+
+    # Fallback: first meaningful chunk of the prompt
+    if len(text) > 20:
+        return f'Prompt: "{text[:120]}..."'
 
     return ""
 
@@ -493,6 +571,308 @@ def _build_recommendations(
         )
 
     return recs
+
+
+# ── Tech stack extraction ─────────────────────────────────────────────────
+
+
+def _extract_tech_stack(asset: AIAsset) -> list[str]:
+    """Extract all technologies used in this solution."""
+    stack = set()
+
+    # From providers found in findings
+    providers_seen = set()
+    for f in asset.raw_findings:
+        if f.provider:
+            providers_seen.add(f.provider)
+    for p in providers_seen:
+        profile = get_provider(p)
+        if profile.name != "unknown":
+            stack.add(profile.display_name)
+
+    # From dependencies
+    for dep in asset.dependencies:
+        pkg = dep.split(">=")[0].split("==")[0].split("@")[0].strip().lower()
+        if pkg in ("flask", "fastapi", "django", "express"):
+            stack.add(pkg.capitalize())
+        elif pkg in ("streamlit",):
+            stack.add("Streamlit")
+        elif pkg in ("gradio",):
+            stack.add("Gradio")
+        elif "psycopg" in pkg or "sqlalchemy" in pkg:
+            stack.add("PostgreSQL")
+        elif "pymongo" in pkg:
+            stack.add("MongoDB")
+        elif "redis" in pkg:
+            stack.add("Redis")
+
+    # From code context — detect frameworks from imports and calls
+    all_text = ""
+    for ctx in asset.code_contexts:
+        for func in ctx.functions:
+            all_text += " " + func.get("body_preview", "")
+        all_text += " " + " ".join(ctx.env_vars)
+
+    if "flask" in all_text.lower():
+        stack.add("Flask")
+    if "fastapi" in all_text.lower():
+        stack.add("FastAPI")
+    if "streamlit" in all_text.lower():
+        stack.add("Streamlit")
+    if "sqlite" in all_text.lower():
+        stack.add("SQLite")
+    if "postgres" in all_text.lower() or "psycopg" in all_text.lower():
+        stack.add("PostgreSQL")
+    if "tavily" in all_text.lower():
+        stack.add("Tavily Search")
+    if "playwright" in all_text.lower():
+        stack.add("Playwright")
+    if "puppeteer" in all_text.lower():
+        stack.add("Puppeteer")
+    if "docker" in all_text.lower():
+        stack.add("Docker")
+    if "mcp" in all_text.lower():
+        stack.add("MCP")
+
+    return sorted(stack)
+
+
+# ── Data involved extraction ──────────────────────────────────────────────
+
+
+def _extract_data_involved(asset: AIAsset) -> list[str]:
+    """Extract what types of data this solution processes."""
+    data_types = set()
+
+    for ctx in asset.code_contexts:
+        all_text = " ".join(
+            [func.get("body_preview", "") for func in ctx.functions]
+            + ctx.prompts
+            + [src.get("detail", "") for src in ctx.data_sources]
+            + [sink.get("detail", "") for sink in ctx.data_sinks]
+            + ctx.raw_snippets
+        ).lower()
+
+        # Detect data types from code content
+        if any(kw in all_text for kw in ("audio", "wav", "mp3", "transcri", "whisper", "speech")):
+            data_types.add("Audio / Speech")
+        if any(kw in all_text for kw in ("image", "photo", "png", "jpg", "vision", "multimodal")):
+            data_types.add("Images")
+        if any(kw in all_text for kw in ("video", "mp4", "frame")):
+            data_types.add("Video")
+        if any(kw in all_text for kw in ("pdf", "document", "docx", "txt file")):
+            data_types.add("Documents")
+        if any(kw in all_text for kw in ("csv", "excel", "spreadsheet", "dataframe")):
+            data_types.add("Spreadsheet / CSV data")
+        if any(kw in all_text for kw in ("stock", "price", "ticker", "dividend", "financial", "investment")):
+            data_types.add("Financial data")
+        if any(kw in all_text for kw in ("email", "smtp", "inbox")):
+            data_types.add("Email")
+        if any(kw in all_text for kw in ("customer", "user_name", "personal", "pii", "phone", "address")):
+            data_types.add("Personal data / PII")
+        if any(kw in all_text for kw in ("password", "credential", "secret", "api_key")):
+            data_types.add("Credentials / Secrets")
+        if any(kw in all_text for kw in ("select ", "insert ", "database", "table", "cursor", "sql")):
+            data_types.add("Database records")
+        if any(kw in all_text for kw in ("embedding", "vector", "similarity")):
+            data_types.add("Vector embeddings")
+        if any(kw in all_text for kw in ("chat", "message", "conversation", "user_input")):
+            data_types.add("Chat / Conversation")
+        if any(kw in all_text for kw in ("search", "query", "web", "scrape", "crawl", "url")):
+            data_types.add("Web content")
+        if any(kw in all_text for kw in ("code", "source", "script", "function", "class")):
+            data_types.add("Source code")
+
+    return sorted(data_types)
+
+
+# ── Category classification ───────────────────────────────────────────────
+
+
+def _classify_category(asset: AIAsset) -> str:
+    """Classify the solution into a category for grouping."""
+    all_text = asset.name.lower() + " " + asset.file_path.lower()
+
+    # Add code context signals
+    for ctx in asset.code_contexts:
+        for func in ctx.functions:
+            all_text += " " + func.get("name", "").lower()
+            all_text += " " + func.get("body_preview", "").lower()
+        all_text += " " + " ".join(p.lower() for p in ctx.prompts)
+
+    if any(kw in all_text for kw in ("finetun", "fine_tun", "train", "dataset", "tokenizer")):
+        return "Fine-tuning & Training"
+    if any(kw in all_text for kw in ("agent", "react", "tool_call", "create_agent", "swarm", "crew")):
+        return "AI Agents"
+    if any(kw in all_text for kw in ("rag", "retriev", "embed", "vector", "chunk", "similarity_search")):
+        return "RAG & Search"
+    if any(kw in all_text for kw in ("chat", "conversation", "message", "assistant")):
+        return "Chatbot & Conversation"
+    if any(kw in all_text for kw in ("web", "playwright", "puppeteer", "browser", "scrape")):
+        return "Web Automation"
+    if any(kw in all_text for kw in ("workflow", "pipeline", "chain", "graph", "node")):
+        return "Workflows & Pipelines"
+    if any(kw in all_text for kw in ("model", "inference", "predict", "classif")):
+        return "Model & Inference"
+    if any(kw in all_text for kw in ("mcp", "server", "client")):
+        return "MCP & Integration"
+
+    return "Other AI Solutions"
+
+
+# ── Solution display name ─────────────────────────────────────────────────
+
+
+def _derive_solution_display_name(asset: AIAsset, category: str) -> str:
+    """Derive a name that describes WHAT the solution does, not what framework it uses.
+
+    Priority:
+    1. README title (if meaningful)
+    2. Specific prompt role ("Joe Rogan voice clone", "Fleurdin florist assistant")
+    3. Purpose from key functions ("Stock Price & Dividend Checker")
+    4. Category + directory context ("Image Analysis — Multimodal")
+    5. Directory-based name (last resort)
+    """
+    import re
+
+    # ── 1. README title ──
+    for ctx in asset.code_contexts:
+        if ctx.language == "markdown" and ctx.raw_snippets:
+            for line in ctx.raw_snippets[0].split("\n"):
+                line = line.strip()
+                if line.startswith("# "):
+                    title = line[2:].strip()
+                    if _is_meaningful_name(title):
+                        return title[:80]
+
+    # ── 2. Specific prompt role ──
+    for ctx in asset.code_contexts:
+        for prompt in ctx.prompts:
+            match = re.match(
+                r"(?:You are|You're|I am|Act as)\s+(.+?)(?:\.|,|!|\n)",
+                prompt, re.IGNORECASE,
+            )
+            if match:
+                role = match.group(1).strip()
+                if _is_meaningful_name(role) and not _is_generic_role(role):
+                    # Capitalize first letter
+                    return role[0].upper() + role[1:] if role else role
+
+    # ── 3. Purpose from key functions ──
+    key_funcs = []
+    for ctx in asset.code_contexts:
+        for func in ctx.functions:
+            name = func.get("name", "")
+            if name and name not in (
+                "main", "__init__", "setup", "run", "config", "chat",
+                "send_message", "append", "invoke",
+            ) and not name.startswith("_"):
+                key_funcs.append(name)
+
+    if key_funcs:
+        # Turn function names into a readable title
+        readable = _funcs_to_title(key_funcs[:4])
+        if readable:
+            return readable
+
+    # ── 4. Category + most specific directory ──
+    dir_leaf = _get_leaf_dir_name(asset)
+    if dir_leaf and dir_leaf != asset.name:
+        return f"{category} — {dir_leaf}"
+
+    # ── 5. Fallback to directory-based name ──
+    return asset.name
+
+
+def _funcs_to_title(func_names: list[str]) -> str:
+    """Convert function names to a readable solution title.
+
+    ['get_stock_price', 'get_dividend_date'] → 'Stock Price & Dividend Tool'
+    ['encode_image'] → 'Image Encoder'
+    ['chat', 'load_history'] → ''  (too generic)
+    """
+    if not func_names:
+        return ""
+
+    # Convert function names to readable phrases
+    phrases = []
+    noise = {"get", "set", "create", "make", "build", "run", "do", "is", "has",
+             "from", "to", "with", "and", "the", "a", "an", "in", "on", "for",
+             "completion", "messages", "append", "chat", "send", "message",
+             "load", "save", "init", "start", "stop", "update", "delete",
+             "process", "handle", "parse", "format", "convert", "check"}
+
+    for name in func_names:
+        parts = [p for p in name.replace("_", " ").split() if p.lower() not in noise]
+        if parts:
+            phrase = " ".join(p.capitalize() for p in parts)
+            if len(phrase) > 3 and phrase not in phrases:
+                phrases.append(phrase)
+
+    if not phrases:
+        return ""
+    if len(phrases) == 1:
+        return phrases[0]
+    if len(phrases) <= 3:
+        return " & ".join(phrases)
+    return ""  # too many, not a clear title
+
+
+def _get_leaf_dir_name(asset: AIAsset) -> str:
+    """Get the most specific (leaf) directory name, cleaned up."""
+    if not asset.file_path:
+        return ""
+    from aiscout.scanners.git_scanner import _clean_dir_name
+    first_file = asset.file_path.split(", ")[0]
+    parts = first_file.split("/")
+    if len(parts) <= 1:
+        return ""
+    # Take the last directory (most specific)
+    leaf = parts[-2]
+    return _clean_dir_name(leaf)
+
+
+# Generic names that should NOT be used as solution names
+_GENERIC_NAMES = {
+    "readme", "tbd", "finish", "todo", "wip", "test", "main", "app",
+    "index", "script", "example", "demo", "description", "run",
+    "run (locally)", "untitled",
+}
+
+# Generic AI roles from prompts that don't describe a specific solution
+_GENERIC_ROLES = {
+    "a helpful assistant", "a helpful ai assistant", "an ai assistant",
+    "an assistant", "a coder", "a programmer", "a developer",
+    "a software developer", "a software engineer", "a coding assistant",
+    "a helpful coding assistant", "an expert", "a helpful expert",
+}
+
+
+def _is_meaningful_name(name: str) -> bool:
+    """Check if a name is specific enough to use as solution name."""
+    cleaned = name.strip().lower()
+    return (
+        len(cleaned) > 3
+        and cleaned not in _GENERIC_NAMES
+        and not cleaned.startswith("untitled")
+    )
+
+
+def _is_generic_role(role: str) -> bool:
+    """Check if a prompt role is too generic to be useful as a name."""
+    cleaned = role.strip().lower()
+    # Exact match
+    if cleaned in _GENERIC_ROLES:
+        return True
+    # Starts with generic pattern
+    if any(cleaned.startswith(g) for g in (
+        "a helpful", "an ai", "a coding", "a software", "a professional",
+    )):
+        return True
+    # Too short to be specific
+    if len(cleaned) < 10:
+        return True
+    return False
 
 
 # ── Risk score calculation ────────────────────────────────────────────────

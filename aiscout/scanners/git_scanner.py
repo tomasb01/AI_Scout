@@ -496,51 +496,71 @@ class GitScanner(BaseScanner):
     def _group_findings_into_assets(
         self, findings: list[Finding], repo_name: str
     ) -> list[AIAsset]:
-        """Group findings by provider into AIAsset objects."""
-        # Group by provider
-        by_provider: dict[str, list[Finding]] = defaultdict(list)
+        """Group findings by solution directory, not by provider.
+
+        Each leaf directory with AI code becomes one AI solution/asset.
+        This way, different tools in the same directory are one solution,
+        and same provider in different directories are separate solutions.
+        """
+        # Group by solution directory
+        by_solution: dict[str, list[Finding]] = defaultdict(list)
         for f in findings:
-            by_provider[f.provider].append(f)
+            solution_dir = _get_solution_dir(f.file_path)
+            by_solution[solution_dir].append(f)
 
         assets = []
-        for provider, provider_findings in by_provider.items():
+        for solution_dir, dir_findings in by_solution.items():
             # Collect unique file paths
-            file_paths = sorted({f.file_path for f in provider_findings})
+            file_paths = sorted({f.file_path for f in dir_findings})
+            # Collect unique providers used in this solution
+            providers = sorted({f.provider for f in dir_findings if f.provider})
+            primary_provider = providers[0] if providers else ""
             # Collect dependencies
             deps = sorted({
-                f.content for f in provider_findings
+                f.content for f in dir_findings
                 if f.type == FindingType.DEPENDENCY_DETECTED
             })
-            # Check for API keys (higher risk)
+            # Check for API keys
             has_api_keys = any(
-                f.type == FindingType.API_KEY_DETECTED for f in provider_findings
+                f.type == FindingType.API_KEY_DETECTED for f in dir_findings
             )
 
-            risk = 0.3  # base risk for any AI usage
+            risk = 0.3
             if has_api_keys:
-                risk = 0.7  # hardcoded key = critical
+                risk = 0.7
 
-            solution_name = _derive_solution_name(file_paths, provider, repo_name)
+            solution_name = _derive_solution_name(file_paths, primary_provider, repo_name)
+
+            # Provider info: use primary, but list all in dependencies
+            provider_info = ProviderInfo(name=primary_provider) if primary_provider else None
+            all_provider_names = [get_provider(p).display_name for p in providers]
+
             assets.append(AIAsset(
                 name=solution_name,
                 type=AssetType.CUSTOM_CODE,
-                provider=ProviderInfo(name=provider),
+                provider=provider_info,
                 risk_score=risk,
                 discovered_via=["git_scanner"],
                 repository=repo_name,
                 file_path=", ".join(file_paths),
                 dependencies=deps,
-                raw_findings=provider_findings,
+                raw_findings=dir_findings,
+                users=all_provider_names,  # reuse users field for provider list temporarily
             ))
 
-        # Disambiguate duplicate names by appending provider
+        # Disambiguate duplicate names
         name_counts: dict[str, int] = defaultdict(int)
         for a in assets:
             name_counts[a.name] += 1
         for a in assets:
-            if name_counts[a.name] > 1 and a.provider:
-                display = get_provider(a.provider.name).display_name
-                a.name = f"{a.name} ({display})"
+            if name_counts[a.name] > 1:
+                # Append the solution directory for disambiguation
+                dir_parts = a.file_path.split(", ")[0].rsplit("/", 1)
+                if len(dir_parts) > 1:
+                    suffix = dir_parts[0].split("/")[-1]
+                    cleaned = _clean_dir_name(suffix)
+                    if cleaned and cleaned != a.name:
+                        a.name = f"{a.name} — {cleaned}"
 
         return sorted(assets, key=lambda a: a.risk_score, reverse=True)
 
@@ -601,6 +621,23 @@ def _package_to_provider(pkg: str) -> str:
         "@langchain/anthropic": "langchain",
     }
     return mapping.get(pkg, pkg)
+
+
+def _get_solution_dir(file_path: str) -> str:
+    """Get the solution directory for a file path.
+
+    The solution directory is the most specific meaningful parent directory.
+    For 'a/b/c/main.py' → 'a/b/c'
+    For 'main.py' → '.'
+    """
+    from pathlib import PurePosixPath
+    parts = PurePosixPath(file_path).parts
+
+    if len(parts) <= 1:
+        return "."
+
+    # Return parent directory (all parts except filename)
+    return str(PurePosixPath(*parts[:-1]))
 
 
 def _derive_solution_name(file_paths: list[str], provider: str, repo_name: str) -> str:

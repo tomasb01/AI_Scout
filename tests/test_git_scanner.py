@@ -88,18 +88,24 @@ def test_walk_files_skips_dirs():
 def test_group_findings():
     from aiscout.models import Finding, FindingType
     scanner = GitScanner(repo_path="/tmp")
+    # Files in SAME directory → one solution asset
     findings = [
         Finding(type=FindingType.IMPORT_DETECTED, file_path="a.py", content="import openai", provider="openai"),
         Finding(type=FindingType.API_KEY_DETECTED, file_path="a.py", content="sk-xxx", redacted_content="sk-x...x", provider="openai"),
         Finding(type=FindingType.IMPORT_DETECTED, file_path="b.py", content="import anthropic", provider="anthropic"),
     ]
     assets = scanner._group_findings_into_assets(findings, "test-repo")
-    assert len(assets) == 2
-    # openai should have higher risk (has API key)
-    openai_asset = next(a for a in assets if a.provider.name == "openai")
-    anthropic_asset = next(a for a in assets if a.provider.name == "anthropic")
-    assert openai_asset.risk_score == 0.7  # has API key
-    assert anthropic_asset.risk_score == 0.3  # import only
+    # All in root dir → grouped into one solution
+    assert len(assets) == 1
+    assert assets[0].risk_score == 0.7  # has API key
+
+    # Files in DIFFERENT directories → separate solution assets
+    findings2 = [
+        Finding(type=FindingType.IMPORT_DETECTED, file_path="backend/app.py", content="import openai", provider="openai"),
+        Finding(type=FindingType.IMPORT_DETECTED, file_path="ml/train.py", content="import anthropic", provider="anthropic"),
+    ]
+    assets2 = scanner._group_findings_into_assets(findings2, "test-repo")
+    assert len(assets2) == 2
 
 
 def test_extract_notebook_source():
@@ -123,5 +129,9 @@ def test_full_scan_local():
     assert result.errors == []
     assert result.metadata["files_scanned"] > 0
 
-    providers = {a.provider.name for a in result.assets}
-    assert "openai" in providers
+    # All fixture files are in the same directory → grouped by solution dir
+    all_providers = set()
+    for asset in result.assets:
+        for f in asset.raw_findings:
+            all_providers.add(f.provider)
+    assert "openai" in all_providers

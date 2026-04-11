@@ -38,7 +38,7 @@ def test_scan_local_no_llm():
     assert result.exit_code == 0
     assert Path(output).exists()
     content = Path(output).read_text()
-    assert "AI Scout Report" in content
+    assert "AI Scout" in content
     Path(output).unlink()
 
 

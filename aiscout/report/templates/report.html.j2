@@ -3,435 +3,366 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>AI Scout Report — {{ repos | join(', ') }}</title>
+<title>AI Scout — {{ repos | join(', ') }}</title>
 <style>
 :root {
-  --bg: #0f1117;
-  --surface: #1a1d27;
-  --surface2: #242736;
-  --surface3: #2d3040;
-  --border: #2e3146;
-  --text: #e1e4ed;
-  --text-muted: #8b8fa3;
-  --text-dim: #5c6078;
-  --critical: #ef4444;
-  --critical-bg: rgba(239, 68, 68, 0.12);
-  --warning: #f59e0b;
-  --warning-bg: rgba(245, 158, 11, 0.12);
-  --ok: #22c55e;
-  --ok-bg: rgba(34, 197, 94, 0.12);
-  --accent: #6366f1;
-  --accent-bg: rgba(99, 102, 241, 0.12);
-  --blue: #3b82f6;
-  --blue-bg: rgba(59, 130, 246, 0.12);
+  --bg: #0f1117; --surface: #1a1d27; --surface2: #242736; --surface3: #2d3040;
+  --border: #2e3146; --text: #e1e4ed; --text-muted: #8b8fa3; --text-dim: #5c6078;
+  --critical: #ef4444; --critical-bg: rgba(239,68,68,0.12);
+  --warning: #f59e0b; --warning-bg: rgba(245,158,11,0.12);
+  --ok: #22c55e; --ok-bg: rgba(34,197,94,0.12);
+  --accent: #6366f1; --accent-bg: rgba(99,102,241,0.12);
+  --blue: #3b82f6; --blue-bg: rgba(59,130,246,0.12);
+  --purple: #a855f7; --purple-bg: rgba(168,85,247,0.12);
 }
-* { margin: 0; padding: 0; box-sizing: border-box; }
-body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif; background: var(--bg); color: var(--text); line-height: 1.6; }
-.container { max-width: 1200px; margin: 0 auto; padding: 0 2rem 2rem; }
+*{margin:0;padding:0;box-sizing:border-box}
+body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',system-ui,sans-serif;background:var(--bg);color:var(--text);line-height:1.5;font-size:14px}
+.wrap{max-width:1400px;margin:0 auto;padding:0 1.5rem 2rem}
+a{color:var(--accent);text-decoration:none}
 
-/* ── Header ── */
-.hero { background: linear-gradient(135deg, #1a1d2f 0%, #0f1117 100%); border-bottom: 1px solid var(--border); padding: 2rem; margin-bottom: 2rem; }
-.hero-inner { max-width: 1200px; margin: 0 auto; }
-.hero h1 { font-size: 1.5rem; font-weight: 700; margin-bottom: 0.5rem; }
-.hero h1 span { color: var(--accent); }
-.hero-meta { color: var(--text-muted); font-size: 0.85rem; margin-bottom: 1rem; }
+/* Hero */
+.hero{background:linear-gradient(135deg,#1a1d2f,#0f1117);border-bottom:1px solid var(--border);padding:1.5rem}
+.hero-inner{max-width:1400px;margin:0 auto}
+.hero h1{font-size:1.4rem;font-weight:700;margin-bottom:.3rem}.hero h1 span{color:var(--accent)}
+.hero-meta{color:var(--text-muted);font-size:.8rem}
+.repo-chips{display:flex;flex-wrap:wrap;gap:.4rem;margin-top:.5rem}
+.rc{display:inline-flex;align-items:center;gap:.4rem;background:var(--surface2);border:1px solid var(--border);border-radius:5px;padding:.25rem .6rem;font-size:.75rem}
+.rc b{color:var(--text)}.rc span{color:var(--text-muted)}
 
-/* Repo chips */
-.repo-chips { display: flex; flex-wrap: wrap; gap: 0.5rem; }
-.repo-chip { display: inline-flex; align-items: center; gap: 0.5rem; background: var(--surface2); border: 1px solid var(--border); border-radius: 6px; padding: 0.4rem 0.8rem; font-size: 0.8rem; }
-.repo-chip .rc-name { font-weight: 600; color: var(--text); }
-.repo-chip .rc-detail { color: var(--text-muted); }
-.repo-chip .rc-dot { width: 6px; height: 6px; border-radius: 50%; background: var(--ok); flex-shrink: 0; }
-.repo-chip.has-errors .rc-dot { background: var(--critical); }
+/* Stats */
+.stats{display:grid;grid-template-columns:repeat(auto-fit,minmax(120px,1fr));gap:.6rem;margin-bottom:1.2rem}
+.st{background:var(--surface);border:1px solid var(--border);border-radius:6px;padding:.8rem;text-align:center}
+.st .v{font-size:1.4rem;font-weight:700}.st .l{color:var(--text-muted);font-size:.65rem;text-transform:uppercase;letter-spacing:.04em}
+.st.s-crit .v{color:var(--critical)}.st.s-warn .v{color:var(--warning)}.st.s-ok .v{color:var(--ok)}
 
-/* ── Stats row ── */
-.stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 0.75rem; margin-bottom: 1.5rem; }
-.stat { background: var(--surface); border: 1px solid var(--border); border-radius: 8px; padding: 1rem; text-align: center; }
-.stat .val { font-size: 1.6rem; font-weight: 700; }
-.stat .lbl { color: var(--text-muted); font-size: 0.7rem; text-transform: uppercase; letter-spacing: 0.05em; }
-.stat.s-critical .val { color: var(--critical); }
-.stat.s-warning .val { color: var(--warning); }
-.stat.s-ok .val { color: var(--ok); }
+/* Heatmap */
+.hm{display:flex;height:5px;border-radius:3px;overflow:hidden;margin-bottom:1.2rem;gap:2px}
+.hm div{border-radius:3px}
+.hm-c{background:var(--critical)}.hm-w{background:var(--warning)}.hm-o{background:var(--ok)}
 
-/* ── Risk heatmap bar ── */
-.heatmap { display: flex; height: 6px; border-radius: 3px; overflow: hidden; margin-bottom: 1.5rem; gap: 2px; }
-.heatmap div { border-radius: 3px; }
-.hm-crit { background: var(--critical); }
-.hm-warn { background: var(--warning); }
-.hm-ok { background: var(--ok); }
+/* Section */
+.sec{margin-bottom:1.5rem}
+.sec-title{font-size:.75rem;font-weight:600;text-transform:uppercase;letter-spacing:.05em;color:var(--text-muted);margin-bottom:.5rem;padding-bottom:.3rem;border-bottom:1px solid var(--border)}
 
-/* ── Section headers ── */
-.section { margin-bottom: 1.5rem; }
-.section-title { font-size: 0.8rem; font-weight: 600; text-transform: uppercase; letter-spacing: 0.06em; color: var(--text-muted); margin-bottom: 0.75rem; padding-bottom: 0.4rem; border-bottom: 1px solid var(--border); }
+/* Category cards */
+.cats{display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:.6rem;margin-bottom:1.2rem}
+.cat{background:var(--surface);border:1px solid var(--border);border-radius:6px;padding:.8rem;cursor:pointer;transition:border-color .15s}
+.cat:hover,.cat.active{border-color:var(--accent)}
+.cat .cat-name{font-size:.85rem;font-weight:600;margin-bottom:.2rem}
+.cat .cat-count{font-size:1.3rem;font-weight:700;color:var(--accent)}
+.cat .cat-sub{font-size:.7rem;color:var(--text-muted)}
 
-/* ── Data Egress table ── */
-.egress-table { width: 100%; border-collapse: collapse; font-size: 0.8rem; background: var(--surface); border-radius: 8px; overflow: hidden; border: 1px solid var(--border); }
-.egress-table th { text-align: left; color: var(--text-muted); font-weight: 600; padding: 0.6rem 0.8rem; background: var(--surface2); font-size: 0.75rem; text-transform: uppercase; letter-spacing: 0.04em; }
-.egress-table td { padding: 0.5rem 0.8rem; border-top: 1px solid var(--border); vertical-align: middle; }
-.egress-table .provider-name { font-weight: 600; }
-.egress-cat { display: inline-block; font-size: 0.65rem; padding: 0.1rem 0.4rem; border-radius: 3px; text-transform: uppercase; letter-spacing: 0.03em; }
-.cat-llm_api { background: var(--blue-bg); color: var(--blue); }
-.cat-embedding_db { background: var(--accent-bg); color: var(--accent); }
-.cat-framework { background: var(--warning-bg); color: var(--warning); }
-.cat-local_runtime { background: var(--ok-bg); color: var(--ok); }
-.region-tag { display: inline-block; font-size: 0.7rem; padding: 0.1rem 0.4rem; border-radius: 3px; background: var(--surface3); color: var(--text-muted); margin: 0.1rem 0.15rem; }
-.region-tag.external { background: var(--warning-bg); color: var(--warning); }
-.region-tag.local { background: var(--ok-bg); color: var(--ok); }
-.region-tag.eu { background: var(--ok-bg); color: var(--ok); }
+/* Overview table */
+.tbl-wrap{overflow-x:auto;margin-bottom:1rem}
+table.ov{width:100%;border-collapse:collapse;font-size:.78rem;background:var(--surface);border:1px solid var(--border);border-radius:6px;overflow:hidden}
+table.ov th{text-align:left;color:var(--text-muted);font-weight:600;padding:.5rem .6rem;background:var(--surface2);font-size:.7rem;text-transform:uppercase;letter-spacing:.03em;white-space:nowrap}
+table.ov td{padding:.45rem .6rem;border-top:1px solid var(--border);vertical-align:top}
+table.ov tr{cursor:pointer;transition:background .1s}
+table.ov tr:hover{background:var(--surface2)}
+table.ov tr.expanded{background:var(--surface2)}
+.sol-name{font-weight:600;color:var(--text)}
+.sol-desc{font-size:.7rem;color:var(--text-muted);margin-top:.1rem;max-width:400px}
+.badge{display:inline-block;padding:.1rem .45rem;border-radius:8px;font-size:.65rem;font-weight:700;text-transform:uppercase}
+.badge.critical{background:var(--critical-bg);color:var(--critical)}
+.badge.warning{background:var(--warning-bg);color:var(--warning)}
+.badge.ok{background:var(--ok-bg);color:var(--ok)}
+.tech-tag{display:inline-block;font-size:.65rem;padding:.05rem .35rem;border-radius:3px;background:var(--accent-bg);color:var(--accent);margin:.1rem .1rem}
+.data-tag{display:inline-block;font-size:.65rem;padding:.05rem .35rem;border-radius:3px;background:var(--purple-bg);color:var(--purple);margin:.1rem .1rem}
 
-/* ── Filters ── */
-.filters { display: flex; flex-wrap: wrap; gap: 0.4rem; margin-bottom: 1rem; align-items: center; }
-.fbtn { background: var(--surface); border: 1px solid var(--border); color: var(--text-muted); padding: 0.3rem 0.8rem; border-radius: 5px; cursor: pointer; font-size: 0.8rem; transition: all 0.15s; }
-.fbtn:hover { border-color: var(--accent); color: var(--text); }
-.fbtn.active { background: var(--accent-bg); border-color: var(--accent); color: var(--accent); }
-.repo-sel { background: var(--surface); border: 1px solid var(--border); color: var(--text); padding: 0.3rem 0.6rem; border-radius: 5px; font-size: 0.8rem; margin-left: auto; }
+/* Detail panel */
+.detail-row{display:none}
+.detail-row.show{display:table-row}
+.detail-cell{padding:1rem 1.5rem;background:var(--surface3)}
+.detail-grid{display:grid;grid-template-columns:1fr 1fr;gap:1rem}
+@media(max-width:768px){.detail-grid{grid-template-columns:1fr}}
+.detail-section h4{font-size:.7rem;color:var(--text-muted);text-transform:uppercase;letter-spacing:.04em;margin-bottom:.3rem}
+.detail-section{margin-bottom:.6rem}
+.rr{padding:.35rem .6rem;border-radius:5px;margin-bottom:.25rem;font-size:.75rem}
+.rr-t{font-weight:600;font-size:.7rem}.rr-d{font-size:.7rem;color:var(--text-muted)}
+.rr.s-critical{background:var(--critical-bg);border-left:3px solid var(--critical)}.rr.s-critical .rr-t{color:var(--critical)}
+.rr.s-warning{background:var(--warning-bg);border-left:3px solid var(--warning)}.rr.s-warning .rr-t{color:var(--warning)}
+.rr.s-info{background:var(--accent-bg);border-left:3px solid var(--accent)}.rr.s-info .rr-t{color:var(--accent)}
+.rec-list{list-style:none;font-size:.7rem;color:var(--text-muted)}.rec-list li{padding:.15rem 0}.rec-list li::before{content:"→ ";color:var(--accent)}
+.finding{font-size:.7rem;font-family:'SF Mono','Fira Code',monospace;color:var(--text-dim);padding:.15rem 0}
+.ft{font-weight:600}.f-import{color:var(--accent)}.f-api_key{color:var(--critical)}.f-dependency{color:var(--warning)}
+.prov-row{display:flex;font-size:.7rem;padding:.1rem 0}.prov-lbl{color:var(--text-dim);min-width:100px}.prov-val{color:var(--text-muted)}
 
-/* ── Asset cards (compact) ── */
-.card { background: var(--surface); border: 1px solid var(--border); border-radius: 8px; margin-bottom: 0.75rem; overflow: hidden; }
-.card-top { display: grid; grid-template-columns: 1fr auto; gap: 0.75rem; padding: 1rem 1.25rem; align-items: start; }
-.card-left h3 { font-size: 0.95rem; font-weight: 600; margin-bottom: 0.2rem; }
-.card-left .card-desc { font-size: 0.8rem; color: var(--text-muted); line-height: 1.4; }
-.card-tags { display: flex; flex-wrap: wrap; gap: 0.35rem; margin-top: 0.4rem; }
-.card-tag { font-size: 0.7rem; padding: 0.1rem 0.45rem; border-radius: 3px; background: var(--surface2); color: var(--text-muted); }
-.card-tag.provider { background: var(--accent-bg); color: var(--accent); font-weight: 600; }
-.card-tag.author { background: var(--blue-bg); color: var(--blue); }
-.card-tag.repo { background: var(--surface3); }
-.card-tag.files { background: var(--surface3); }
+/* Filters */
+.filters{display:flex;flex-wrap:wrap;gap:.3rem;margin-bottom:.6rem}
+.fb{background:var(--surface);border:1px solid var(--border);color:var(--text-muted);padding:.2rem .6rem;border-radius:4px;cursor:pointer;font-size:.75rem;transition:all .12s}
+.fb:hover{border-color:var(--accent);color:var(--text)}.fb.active{background:var(--accent-bg);border-color:var(--accent);color:var(--accent)}
+select.repo-sel{background:var(--surface);border:1px solid var(--border);color:var(--text);padding:.2rem .5rem;border-radius:4px;font-size:.75rem;margin-left:auto}
 
-.card-right { display: flex; flex-direction: column; align-items: flex-end; gap: 0.3rem; min-width: 90px; }
-.badge { padding: 0.2rem 0.6rem; border-radius: 10px; font-size: 0.7rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.03em; }
-.badge.critical { background: var(--critical-bg); color: var(--critical); }
-.badge.warning { background: var(--warning-bg); color: var(--warning); }
-.badge.ok { background: var(--ok-bg); color: var(--ok); }
-.risk-why { font-size: 0.7rem; color: var(--text-dim); text-align: right; max-width: 180px; line-height: 1.3; }
-
-/* ── Card expandable detail ── */
-.card-detail { border-top: 1px solid var(--border); }
-.card-detail summary { padding: 0.6rem 1.25rem; font-size: 0.8rem; font-weight: 600; color: var(--text-muted); cursor: pointer; background: var(--surface2); }
-.card-detail summary:hover { color: var(--text); }
-.card-detail-body { padding: 1rem 1.25rem; }
-
-/* Risk reasons in detail */
-.risk-reasons { list-style: none; margin-bottom: 0.75rem; }
-.rr { padding: 0.5rem 0.75rem; border-radius: 6px; margin-bottom: 0.35rem; font-size: 0.8rem; }
-.rr-title { font-weight: 600; margin-bottom: 0.15rem; }
-.rr-text { font-size: 0.75rem; color: var(--text-muted); line-height: 1.4; }
-.rr.s-critical { background: var(--critical-bg); border-left: 3px solid var(--critical); }
-.rr.s-critical .rr-title { color: var(--critical); }
-.rr.s-warning { background: var(--warning-bg); border-left: 3px solid var(--warning); }
-.rr.s-warning .rr-title { color: var(--warning); }
-.rr.s-info { background: var(--accent-bg); border-left: 3px solid var(--accent); }
-.rr.s-info .rr-title { color: var(--accent); }
-
-/* Recommendations */
-.recs h4 { font-size: 0.7rem; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.04em; margin-bottom: 0.35rem; }
-.recs ul { list-style: none; }
-.recs li { font-size: 0.75rem; padding: 0.25rem 0; color: var(--text-muted); }
-.recs li::before { content: "\2192\00a0"; color: var(--accent); }
-
-/* Provider info in detail */
-.prov-info { margin-top: 0.75rem; padding-top: 0.5rem; border-top: 1px solid var(--border); }
-.prov-row { display: flex; font-size: 0.75rem; padding: 0.1rem 0; }
-.prov-lbl { color: var(--text-dim); min-width: 110px; }
-.prov-val { color: var(--text-muted); }
-
-/* Findings in detail */
-.findings-section { margin-top: 0.75rem; padding-top: 0.5rem; border-top: 1px solid var(--border); }
-.findings-section h4 { font-size: 0.7rem; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.04em; margin-bottom: 0.35rem; }
-.finding { font-size: 0.75rem; padding: 0.2rem 0; font-family: 'SF Mono', 'Fira Code', monospace; color: var(--text-dim); }
-.ft { font-weight: 600; }
-.ft.f-import { color: var(--accent); }
-.ft.f-api_key { color: var(--critical); }
-.ft.f-dependency { color: var(--warning); }
-
-/* ── Overlap section ── */
-.overlap-table { width: 100%; border-collapse: collapse; font-size: 0.8rem; }
-.overlap-table th { text-align: left; color: var(--text-muted); padding: 0.4rem 0.6rem; border-bottom: 1px solid var(--border); }
-.overlap-table td { padding: 0.4rem 0.6rem; border-bottom: 1px solid var(--border); }
-
-/* ── Errors ── */
-.errors { background: var(--critical-bg); border: 1px solid var(--critical); border-radius: 8px; padding: 0.75rem 1rem; margin-bottom: 1.5rem; }
-.errors h3 { color: var(--critical); font-size: 0.85rem; margin-bottom: 0.3rem; }
-.errors li { font-size: 0.8rem; margin-left: 1rem; }
-
-/* ── Empty state ── */
-.empty { text-align: center; padding: 3rem; color: var(--text-muted); }
-
-/* ── Footer ── */
-footer { text-align: center; color: var(--text-dim); font-size: 0.7rem; margin-top: 2rem; padding-top: 0.75rem; border-top: 1px solid var(--border); }
-
-/* ── LLM classification ── */
-.llm-class { background: var(--surface2); border-radius: 6px; padding: 0.6rem 0.8rem; margin-top: 0.75rem; }
-.llm-class h4 { font-size: 0.7rem; color: var(--text-muted); margin-bottom: 0.3rem; text-transform: uppercase; }
-.llm-tags { display: flex; flex-wrap: wrap; gap: 0.25rem; margin-bottom: 0.3rem; }
-.ltag { background: var(--accent-bg); color: var(--accent); padding: 0.1rem 0.4rem; border-radius: 3px; font-size: 0.7rem; }
-.ltag.pii { background: var(--critical-bg); color: var(--critical); }
-.ltag.confidential { background: var(--warning-bg); color: var(--warning); }
-.llm-class .llm-text { font-size: 0.75rem; color: var(--text-muted); }
+footer{text-align:center;color:var(--text-dim);font-size:.65rem;margin-top:2rem;padding-top:.5rem;border-top:1px solid var(--border)}
+.empty{text-align:center;padding:2rem;color:var(--text-muted)}
 </style>
 </head>
 <body>
 
-{# ════════════════════════════════════════════════════════════════════════ #}
-{# HEADER                                                                   #}
-{# ════════════════════════════════════════════════════════════════════════ #}
-<div class="hero">
-  <div class="hero-inner">
-    <h1><span>AI Scout</span> Report</h1>
-    <div class="hero-meta">{{ scan_date }}{% if all_authors %} · {{ all_authors | length }} contributor{{ 's' if all_authors | length != 1 }}{% endif %}</div>
-    <div class="repo-chips">
-      {% for rd in repo_details %}
-      <div class="repo-chip {% if rd.errors > 0 %}has-errors{% endif %}">
-        <span class="rc-dot"></span>
-        <span class="rc-name">{{ rd.name }}</span>
-        <span class="rc-detail">{{ rd.branch }} · {{ rd.files_scanned }} files · {{ rd.assets_found }} assets</span>
-      </div>
-      {% endfor %}
-    </div>
+<div class="hero"><div class="hero-inner">
+  <h1><span>AI Scout</span> Report</h1>
+  <div class="hero-meta">{{ scan_date }}{% if all_authors %} · {{ all_authors | length }} contributor{{ 's' if all_authors | length != 1 }}{% endif %}</div>
+  <div class="repo-chips">
+    {% for rd in repo_details %}
+    <div class="rc"><b>{{ rd.name }}</b> <span>{{ rd.branch }} · {{ rd.files_scanned }} files · {{ rd.assets_found }} assets</span></div>
+    {% endfor %}
   </div>
-</div>
+</div></div>
 
-<div class="container">
+<div class="wrap">
 
-{# ════════════════════════════════════════════════════════════════════════ #}
-{# STATS                                                                    #}
-{# ════════════════════════════════════════════════════════════════════════ #}
+{# ═══ STATS ═══ #}
 <div class="stats">
-  <div class="stat"><div class="val">{{ total_assets }}</div><div class="lbl">AI Solutions</div></div>
-  <div class="stat s-critical"><div class="val">{{ critical_count }}</div><div class="lbl">Critical</div></div>
-  <div class="stat s-warning"><div class="val">{{ warning_count }}</div><div class="lbl">Warning</div></div>
-  <div class="stat s-ok"><div class="val">{{ ok_count }}</div><div class="lbl">OK</div></div>
-  <div class="stat"><div class="val">{{ data_egress | length }}</div><div class="lbl">Providers</div></div>
+  <div class="st"><div class="v">{{ total_assets }}</div><div class="l">AI Solutions</div></div>
+  <div class="st s-crit"><div class="v">{{ critical_count }}</div><div class="l">Critical</div></div>
+  <div class="st s-warn"><div class="v">{{ warning_count }}</div><div class="l">Warning</div></div>
+  <div class="st s-ok"><div class="v">{{ ok_count }}</div><div class="l">OK</div></div>
+  <div class="st"><div class="v">{{ categories | length }}</div><div class="l">Categories</div></div>
+  <div class="st"><div class="v">{{ data_egress | length }}</div><div class="l">Providers</div></div>
 </div>
 
 {% if total_assets > 0 %}
-<div class="heatmap">
-  {% if critical_count > 0 %}<div class="hm-crit" style="flex:{{ critical_count }}"></div>{% endif %}
-  {% if warning_count > 0 %}<div class="hm-warn" style="flex:{{ warning_count }}"></div>{% endif %}
-  {% if ok_count > 0 %}<div class="hm-ok" style="flex:{{ ok_count }}"></div>{% endif %}
+<div class="hm">
+  {% if critical_count > 0 %}<div class="hm-c" style="flex:{{ critical_count }}"></div>{% endif %}
+  {% if warning_count > 0 %}<div class="hm-w" style="flex:{{ warning_count }}"></div>{% endif %}
+  {% if ok_count > 0 %}<div class="hm-o" style="flex:{{ ok_count }}"></div>{% endif %}
 </div>
 {% endif %}
 
-{# ════════════════════════════════════════════════════════════════════════ #}
-{# DATA EGRESS OVERVIEW                                                     #}
-{# ════════════════════════════════════════════════════════════════════════ #}
-{% if assets %}
-<div class="section">
-  <div class="section-title">AI Solutions Overview</div>
-  <table class="egress-table">
-    <tr>
-      <th>Solution</th>
-      <th>Built On</th>
-      <th>Author</th>
-      <th>Data Processed In</th>
-      <th>Risk</th>
-    </tr>
-    {% for asset in assets %}
-    {% set insight = insights.get(asset.id) if insights else None %}
-    <tr>
-      <td class="provider-name">{{ asset.name }}</td>
-      <td>
-        {% if insight and insight.provider_profile %}
-        <span class="egress-cat cat-{{ insight.provider_profile.category }}">{{ insight.provider_profile.display_name }}</span>
-        {% endif %}
-      </td>
-      <td style="color: var(--text-muted); font-size: 0.75rem;">{{ asset.owner if asset.owner != 'unknown' else '—' }}</td>
-      <td>
-        {% if insight and insight.provider_profile %}
-        {% for region in insight.provider_profile.data_residency %}
-        <span class="region-tag {% if 'local' in region.lower() %}local{% elif 'EU' in region or 'eu' in region.lower() %}eu{% elif 'depends' in region.lower() %}{% else %}external{% endif %}">{{ region }}</span>
-        {% endfor %}
-        {% endif %}
-      </td>
-      <td><span class="badge {{ asset.risk_score | risk_class }}">{{ asset.risk_score | risk_class }}</span></td>
-    </tr>
-    {% endfor %}
-  </table>
-</div>
-{% endif %}
-
-{# ════════════════════════════════════════════════════════════════════════ #}
-{# ERRORS                                                                   #}
-{# ════════════════════════════════════════════════════════════════════════ #}
-{% if errors %}
-<div class="errors">
-  <h3>Scan Errors</h3>
-  <ul>{% for err in errors %}<li>{{ err }}</li>{% endfor %}</ul>
-</div>
-{% endif %}
-
-{# ════════════════════════════════════════════════════════════════════════ #}
-{# CROSS-REPO OVERLAP                                                      #}
-{# ════════════════════════════════════════════════════════════════════════ #}
-{% if cross_repo_overlaps %}
-<div class="section">
-  <div class="section-title">Cross-Repository Overlap</div>
-  <table class="overlap-table">
-    <tr><th>Provider</th><th>Used in Repositories</th></tr>
-    {% for provider, repo_list in cross_repo_overlaps.items() %}
-    <tr><td><strong>{{ provider }}</strong></td><td>{{ repo_list | join(', ') }}</td></tr>
-    {% endfor %}
-  </table>
-</div>
-{% endif %}
-
-{# ════════════════════════════════════════════════════════════════════════ #}
-{# AI SOLUTIONS                                                             #}
-{# ════════════════════════════════════════════════════════════════════════ #}
-<div class="section">
-  <div class="section-title">AI Solutions ({{ total_assets }})</div>
-
-  <div class="filters">
-    <button class="fbtn active" data-filter="all">All ({{ total_assets }})</button>
-    {% if critical_count %}<button class="fbtn" data-filter="critical">Critical ({{ critical_count }})</button>{% endif %}
-    {% if warning_count %}<button class="fbtn" data-filter="warning">Warning ({{ warning_count }})</button>{% endif %}
-    {% if ok_count %}<button class="fbtn" data-filter="ok">OK ({{ ok_count }})</button>{% endif %}
-    {% if repos | length > 1 %}
-    <select class="repo-sel" id="repoFilter">
-      <option value="all">All repos</option>
-      {% for repo in repos %}<option value="{{ repo }}">{{ repo }}</option>{% endfor %}
-    </select>
-    {% endif %}
-  </div>
-
-  <div id="assetList">
-  {% for asset in assets %}
-  {% set insight = insights.get(asset.id) if insights else None %}
-  {% set risk = asset.risk_score | risk_class %}
-  <div class="card" data-risk="{{ risk }}" data-repo="{{ asset.repository }}">
-
-    {# ── Compact top section ── #}
-    <div class="card-top">
-      <div class="card-left">
-        <h3>{{ asset.name }}</h3>
-        {% if insight %}
-        <div class="card-desc">{{ insight.summary.split('. Found in')[0] | truncate(160) }}.</div>
-        {% endif %}
-        <div class="card-tags">
-          {% if asset.provider %}
-          <span class="card-tag provider">{{ insights[asset.id].provider_profile.display_name if insights.get(asset.id) and insights[asset.id].provider_profile else asset.provider.name }}</span>
-          {% endif %}
-          {% if asset.owner and asset.owner != 'unknown' %}
-          <span class="card-tag author">{{ asset.owner }}</span>
-          {% endif %}
-          <span class="card-tag repo">{{ asset.repository }}</span>
-          {% set files = asset.file_path.split(', ') %}
-          <span class="card-tag files">{{ files | length }} file{{ 's' if files | length != 1 }}</span>
-        </div>
-      </div>
-      <div class="card-right">
-        <span class="badge {{ risk }}">{{ risk }}</span>
-        {% if insight and insight.risk_reasons %}
-        <span class="risk-why">{{ insight.risk_reasons[0].title }}</span>
-        {% endif %}
+{# ═══ CATEGORIES ═══ #}
+{% if categories %}
+<div class="sec">
+  <div class="sec-title">Solution Categories</div>
+  <div class="cats">
+    <div class="cat active" data-cat="all">
+      <div class="cat-count">{{ total_assets }}</div>
+      <div class="cat-name">All Solutions</div>
+    </div>
+    {% for cat_name, cat_assets in categories.items() %}
+    <div class="cat" data-cat="{{ cat_name }}">
+      <div class="cat-count">{{ cat_assets | length }}</div>
+      <div class="cat-name">{{ cat_name }}</div>
+      <div class="cat-sub">
+        {% set crit = cat_assets | selectattr('risk_score', 'ge', 0.7) | list | length %}
+        {% set warn = cat_assets | selectattr('risk_score', 'ge', 0.4) | rejectattr('risk_score', 'ge', 0.7) | list | length %}
+        {% if crit %}{{ crit }} critical{% endif %}{% if crit and warn %}, {% endif %}{% if warn %}{{ warn }} warning{% endif %}
       </div>
     </div>
+    {% endfor %}
+  </div>
+</div>
+{% endif %}
 
-    {# ── Expandable detail ── #}
-    {% if insight %}
-    <details class="card-detail">
-      <summary>View details</summary>
-      <div class="card-detail-body">
+{# ═══ FILTERS ═══ #}
+<div class="filters">
+  <button class="fb active" data-filter="all">All</button>
+  {% if critical_count %}<button class="fb" data-filter="critical">Critical ({{ critical_count }})</button>{% endif %}
+  {% if warning_count %}<button class="fb" data-filter="warning">Warning ({{ warning_count }})</button>{% endif %}
+  <button class="fb" data-filter="ok">OK ({{ ok_count }})</button>
+  {% if repos | length > 1 %}
+  <select class="repo-sel" id="repoF">
+    <option value="all">All repos</option>
+    {% for repo in repos %}<option value="{{ repo }}">{{ repo }}</option>{% endfor %}
+  </select>
+  {% endif %}
+</div>
 
-        {# Risk reasons #}
-        {% if insight.risk_reasons %}
-        <ul class="risk-reasons">
-          {% for reason in insight.risk_reasons %}
-          <li class="rr s-{{ reason.severity }}">
-            <div class="rr-title">{{ reason.title }}</div>
-            <div class="rr-text">{{ reason.detail }}</div>
-          </li>
-          {% endfor %}
-        </ul>
-        {% endif %}
+{# ═══ SOLUTIONS TABLE ═══ #}
+<div class="tbl-wrap">
+<table class="ov" id="solTable">
+<thead>
+<tr>
+  <th>Solution</th>
+  <th>Built On</th>
+  <th>Author</th>
+  <th>Data Involved</th>
+  <th>Risk</th>
+</tr>
+</thead>
+<tbody>
+{% for asset in assets %}
+{% set insight = insights.get(asset.id) if insights else None %}
+{% set risk = asset.risk_score | risk_class %}
+{% set cat = insight.category if insight else 'Other' %}
+<tr class="sol-row" data-risk="{{ risk }}" data-repo="{{ asset.repository }}" data-cat="{{ cat }}" data-id="{{ asset.id }}">
+  <td>
+    <div class="sol-name">{{ insight.solution_name if insight and insight.solution_name else asset.name }}</div>
+    <div class="sol-desc">{{ insight.summary[:120] if insight else '' }}{% if insight and insight.summary | length > 120 %}...{% endif %}</div>
+  </td>
+  <td>
+    {% if insight and insight.tech_stack %}
+    {% for tech in insight.tech_stack[:4] %}<span class="tech-tag">{{ tech }}</span>{% endfor %}
+    {% if insight.tech_stack | length > 4 %}<span class="tech-tag">+{{ insight.tech_stack | length - 4 }}</span>{% endif %}
+    {% elif insight and insight.provider_profile %}
+    <span class="tech-tag">{{ insight.provider_profile.display_name }}</span>
+    {% endif %}
+  </td>
+  <td style="font-size:.7rem;color:var(--text-muted)">{{ asset.owner if asset.owner != 'unknown' else '—' }}</td>
+  <td>
+    {% if insight and insight.data_involved %}
+    {% for d in insight.data_involved[:3] %}<span class="data-tag">{{ d }}</span>{% endfor %}
+    {% if insight.data_involved | length > 3 %}<span class="data-tag">+{{ insight.data_involved | length - 3 }}</span>{% endif %}
+    {% else %}<span style="color:var(--text-dim);font-size:.7rem">—</span>{% endif %}
+  </td>
+  <td><span class="badge {{ risk }}">{{ risk }}</span></td>
+</tr>
 
-        {# Recommendations #}
-        {% if insight.recommendations %}
-        <div class="recs">
-          <h4>Recommendations</h4>
-          <ul>{% for rec in insight.recommendations %}<li>{{ rec }}</li>{% endfor %}</ul>
-        </div>
-        {% endif %}
+{# ─── DETAIL ROW ─── #}
+<tr class="detail-row" data-id="{{ asset.id }}">
+<td colspan="5" class="detail-cell">
+<div class="detail-grid">
+  <div>
+    {# Summary #}
+    <div class="detail-section">
+      <h4>Summary</h4>
+      <p style="font-size:.78rem;color:var(--text)">{{ insight.summary if insight else 'No analysis available.' }}</p>
+    </div>
 
-        {# Provider info #}
-        {% if insight.provider_profile and insight.provider_profile.name != 'unknown' %}
-        <div class="prov-info">
-          <div class="prov-row"><span class="prov-lbl">Vendor</span><span class="prov-val">{{ insight.provider_profile.vendor }}</span></div>
-          <div class="prov-row"><span class="prov-lbl">Data residency</span><span class="prov-val">{{ insight.provider_profile.data_residency | join(', ') }}</span></div>
-          <div class="prov-row"><span class="prov-lbl">Training policy</span><span class="prov-val">{{ insight.provider_profile.training_policy }}</span></div>
-          {% if insight.provider_profile.certifications %}
-          <div class="prov-row"><span class="prov-lbl">Certifications</span><span class="prov-val">{{ insight.provider_profile.certifications | join(', ') }}</span></div>
-          {% endif %}
-        </div>
-        {% endif %}
-
-        {# Raw findings #}
-        {% if asset.raw_findings %}
-        <div class="findings-section">
-          <h4>Findings ({{ asset.raw_findings | length }})</h4>
-          {% for f in asset.raw_findings[:10] %}
-          <div class="finding">
-            <span class="ft {% if f.type == FindingType.IMPORT_DETECTED %}f-import{% elif f.type == FindingType.API_KEY_DETECTED %}f-api_key{% else %}f-dependency{% endif %}">{{ f.type.value | replace('_', ' ') }}</span>
-            {{ f.file_path }}{% if f.line_number %}:{{ f.line_number }}{% endif %} — {{ f.redacted_content if f.redacted_content else f.content }}
-          </div>
-          {% endfor %}
-          {% if asset.raw_findings | length > 10 %}
-          <div class="finding">... and {{ asset.raw_findings | length - 10 }} more</div>
-          {% endif %}
-        </div>
-        {% endif %}
-
-        {# LLM classification if available #}
-        {% if asset.data_classification %}
-        <div class="llm-class">
-          <h4>LLM Classification ({{ asset.data_classification.confidence }})</h4>
-          {% if asset.data_classification.categories %}
-          <div class="llm-tags">
-            {% for cat in asset.data_classification.categories %}
-            <span class="ltag {% if cat.value in ['pii', 'financial'] %}pii{% elif cat.value == 'confidential' %}confidential{% endif %}">{{ cat.value }}</span>
-            {% endfor %}
-          </div>
-          {% endif %}
-          {% if asset.data_classification.details %}
-          <p class="llm-text">{{ asset.data_classification.details }}</p>
-          {% endif %}
-        </div>
-        {% endif %}
-
+    {# Risk Reasons #}
+    {% if insight and insight.risk_reasons %}
+    <div class="detail-section">
+      <h4>Risk Analysis</h4>
+      {% for reason in insight.risk_reasons %}
+      <div class="rr s-{{ reason.severity }}">
+        <div class="rr-t">{{ reason.title }}</div>
+        <div class="rr-d">{{ reason.detail }}</div>
       </div>
-    </details>
+      {% endfor %}
+    </div>
     {% endif %}
 
-  </div>
-  {% endfor %}
+    {# Recommendations #}
+    {% if insight and insight.recommendations %}
+    <div class="detail-section">
+      <h4>Recommendations</h4>
+      <ul class="rec-list">{% for r in insight.recommendations %}<li>{{ r }}</li>{% endfor %}</ul>
+    </div>
+    {% endif %}
   </div>
 
-  {% if total_assets == 0 %}
-  <div class="empty">No AI solutions found in the scanned repositories.</div>
-  {% endif %}
+  <div>
+    {# Tech Stack #}
+    {% if insight and insight.tech_stack %}
+    <div class="detail-section">
+      <h4>Technology Stack</h4>
+      {% for tech in insight.tech_stack %}<span class="tech-tag">{{ tech }}</span>{% endfor %}
+    </div>
+    {% endif %}
 
+    {# Data Involved #}
+    {% if insight and insight.data_involved %}
+    <div class="detail-section">
+      <h4>Data Involved</h4>
+      {% for d in insight.data_involved %}<span class="data-tag">{{ d }}</span>{% endfor %}
+    </div>
+    {% endif %}
+
+    {# Provider Info #}
+    {% if insight and insight.provider_profile and insight.provider_profile.name != 'unknown' %}
+    <div class="detail-section">
+      <h4>Provider</h4>
+      <div class="prov-row"><span class="prov-lbl">Vendor</span><span class="prov-val">{{ insight.provider_profile.vendor }}</span></div>
+      <div class="prov-row"><span class="prov-lbl">Data residency</span><span class="prov-val">{{ insight.provider_profile.data_residency | join(', ') }}</span></div>
+      <div class="prov-row"><span class="prov-lbl">Training policy</span><span class="prov-val">{{ insight.provider_profile.training_policy }}</span></div>
+      {% if insight.provider_profile.certifications %}
+      <div class="prov-row"><span class="prov-lbl">Certifications</span><span class="prov-val">{{ insight.provider_profile.certifications | join(', ') }}</span></div>
+      {% endif %}
+    </div>
+    {% endif %}
+
+    {# Findings #}
+    {% if asset.raw_findings %}
+    <div class="detail-section">
+      <h4>Findings ({{ asset.raw_findings | length }})</h4>
+      {% for f in asset.raw_findings[:8] %}
+      <div class="finding">
+        <span class="ft {% if f.type == FindingType.IMPORT_DETECTED %}f-import{% elif f.type == FindingType.API_KEY_DETECTED %}f-api_key{% else %}f-dependency{% endif %}">{{ f.type.value | replace('_', ' ') }}</span>
+        {{ f.file_path }}{% if f.line_number %}:{{ f.line_number }}{% endif %} — {{ f.redacted_content if f.redacted_content else f.content }}
+      </div>
+      {% endfor %}
+      {% if asset.raw_findings | length > 8 %}
+      <div class="finding" style="color:var(--text-dim)">... +{{ asset.raw_findings | length - 8 }} more</div>
+      {% endif %}
+    </div>
+    {% endif %}
+
+    {# Files #}
+    <div class="detail-section">
+      <h4>Files ({{ asset.file_path.split(', ') | length }})</h4>
+      <div style="font-size:.7rem;color:var(--text-dim)">
+        {% for fp in asset.file_path.split(', ')[:8] %}{{ fp }}<br>{% endfor %}
+        {% if asset.file_path.split(', ') | length > 8 %}... +{{ asset.file_path.split(', ') | length - 8 }} more{% endif %}
+      </div>
+    </div>
+  </div>
 </div>
+</td>
+</tr>
+{% endfor %}
+</tbody>
+</table>
+</div>
+
+{% if total_assets == 0 %}
+<div class="empty">No AI solutions found in the scanned repositories.</div>
+{% endif %}
 
 <footer>Generated by AI Scout v{{ version }}</footer>
 </div>
 
 <script>
-document.querySelectorAll('.fbtn').forEach(btn => {
-  btn.addEventListener('click', () => {
-    document.querySelectorAll('.fbtn').forEach(b => b.classList.remove('active'));
-    btn.classList.add('active');
+// Category filter
+document.querySelectorAll('.cat').forEach(c=>{
+  c.addEventListener('click',()=>{
+    document.querySelectorAll('.cat').forEach(x=>x.classList.remove('active'));
+    c.classList.add('active');
     applyFilters();
   });
 });
-const rs = document.getElementById('repoFilter');
-if (rs) rs.addEventListener('change', applyFilters);
-function applyFilters() {
-  const risk = document.querySelector('.fbtn.active').dataset.filter;
-  const repo = rs ? rs.value : 'all';
-  document.querySelectorAll('.card[data-risk]').forEach(c => {
-    c.style.display = (risk === 'all' || c.dataset.risk === risk) && (repo === 'all' || c.dataset.repo === repo) ? '' : 'none';
+
+// Risk filter
+document.querySelectorAll('.fb').forEach(b=>{
+  b.addEventListener('click',()=>{
+    document.querySelectorAll('.fb').forEach(x=>x.classList.remove('active'));
+    b.classList.add('active');
+    applyFilters();
+  });
+});
+
+// Repo filter
+const rs=document.getElementById('repoF');
+if(rs) rs.addEventListener('change',applyFilters);
+
+function applyFilters(){
+  const risk=document.querySelector('.fb.active').dataset.filter;
+  const repo=rs?rs.value:'all';
+  const cat=document.querySelector('.cat.active').dataset.cat;
+  document.querySelectorAll('.sol-row').forEach(r=>{
+    const mr=risk==='all'||r.dataset.risk===risk;
+    const mre=repo==='all'||r.dataset.repo===repo;
+    const mc=cat==='all'||r.dataset.cat===cat;
+    r.style.display=(mr&&mre&&mc)?'':'none';
+    // Also hide detail row
+    const dr=r.nextElementSibling;
+    if(dr&&dr.classList.contains('detail-row')){
+      dr.classList.remove('show');
+      r.classList.remove('expanded');
+    }
   });
 }
+
+// Row click → expand/collapse detail
+document.querySelectorAll('.sol-row').forEach(r=>{
+  r.addEventListener('click',()=>{
+    const dr=r.nextElementSibling;
+    if(dr&&dr.classList.contains('detail-row')){
+      const show=!dr.classList.contains('show');
+      // Close all others
+      document.querySelectorAll('.detail-row.show').forEach(d=>{d.classList.remove('show');d.previousElementSibling.classList.remove('expanded')});
+      if(show){dr.classList.add('show');r.classList.add('expanded')}
+    }
+  });
+});
 </script>
 </body>
 </html>

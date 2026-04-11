@@ -89,14 +89,42 @@ def analyze_assets(assets: list[AIAsset], repo_root: str | Path):
 
 
 def _analyze_asset_files(asset: AIAsset, repo_root: Path) -> list[CodeContext]:
-    """Read and analyze all files in an asset."""
+    """Read and analyze all files in an asset's solution directory.
+
+    Reads not just files with AI imports, but ALL code files in the
+    solution directory + README.md. This gives full context about
+    what the solution does.
+    """
     if not asset.file_path:
         return []
 
     contexts = []
-    file_paths = asset.file_path.split(", ")
 
-    for rel_path in file_paths:
+    # Find the solution directory (common parent of all files)
+    file_paths = asset.file_path.split(", ")
+    solution_dirs = set()
+    for fp in file_paths:
+        parent = str(Path(fp).parent)
+        solution_dirs.add(parent)
+
+    # Read README.md from solution directories
+    for sol_dir in solution_dirs:
+        readme_ctx = _read_readme(repo_root, sol_dir)
+        if readme_ctx:
+            contexts.append(readme_ctx)
+
+    # Collect ALL code files in solution directories (not just ones with AI imports)
+    all_code_files = set(file_paths)  # start with known AI files
+    for sol_dir in solution_dirs:
+        dir_path = repo_root / sol_dir
+        if dir_path.exists() and dir_path.is_dir():
+            for f in dir_path.iterdir():
+                if f.is_file() and f.suffix.lower() in LANG_MAP and f.stat().st_size < 500_000:
+                    rel = str(f.relative_to(repo_root))
+                    all_code_files.add(rel)
+
+    # Analyze all code files
+    for rel_path in sorted(all_code_files):
         full_path = repo_root / rel_path
         if not full_path.exists() or not full_path.is_file():
             continue
@@ -127,6 +155,34 @@ def _analyze_asset_files(asset: AIAsset, repo_root: Path) -> list[CodeContext]:
             contexts.append(ctx)
 
     return contexts
+
+
+def _read_readme(repo_root: Path, solution_dir: str) -> CodeContext | None:
+    """Read README.md from a solution directory and extract useful content."""
+    dir_path = repo_root / solution_dir
+    for name in ("README.md", "readme.md", "README.txt", "README"):
+        readme_path = dir_path / name
+        if readme_path.exists():
+            try:
+                content = readme_path.read_text(encoding="utf-8", errors="ignore").strip()
+            except OSError:
+                continue
+            # Skip empty or trivial READMEs
+            if len(content) < 20:
+                continue
+            stripped_upper = content.strip().upper()
+            if stripped_upper in ("FINISH", "TBD", "TODO", "WIP", "DESCRIPTION"):
+                continue
+            # Skip READMEs that are just a title with no content
+            lines = [l for l in content.split("\n") if l.strip() and not l.strip().startswith("#")]
+            if not lines:
+                continue
+            return CodeContext(
+                file_path=str(Path(solution_dir) / name),
+                language="markdown",
+                raw_snippets=[content[:1000]],
+            )
+    return None
 
 
 def _has_useful_context(ctx: CodeContext) -> bool:

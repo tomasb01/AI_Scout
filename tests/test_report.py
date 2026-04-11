@@ -70,7 +70,7 @@ def test_generate_creates_file():
     path = gen.generate()
 
     content = Path(path).read_text()
-    assert "AI Scout Report" in content
+    assert "AI Scout" in content
     assert "openai usage" in content
     assert "langchain usage" in content
     Path(path).unlink()
