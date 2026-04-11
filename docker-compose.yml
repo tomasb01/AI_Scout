@@ -1,24 +1,25 @@
 services:
-  ollama:
-    image: ollama/ollama:latest
-    container_name: ai-scout-ollama
-    ports:
-      - "11434:11434"
-    volumes:
-      - ollama_data:/root/.ollama
-
   aiscout:
     build: .
     container_name: ai-scout
-    depends_on:
-      - ollama
-    environment:
-      - AISCOUT_LLM_URL=http://ollama:11434
+    ports:
+      - "8080:8080"
     volumes:
       - ./config:/app/config
       - ./reports:/app/reports
-    entrypoint: ["aiscout"]
-    command: ["scan", "--help"]
+    environment:
+      - AISCOUT_GIT_TOKEN=${AISCOUT_GIT_TOKEN:-}
+    restart: unless-stopped
 
-volumes:
-  ollama_data:
+  # Optional: uncomment to add local LLM
+  # ollama:
+  #   image: ollama/ollama:latest
+  #   container_name: ai-scout-ollama
+  #   ports:
+  #     - "11434:11434"
+  #   volumes:
+  #     - ollama_data:/root/.ollama
+  #   restart: unless-stopped
+
+# volumes:
+#   ollama_data:
