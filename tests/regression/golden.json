@@ -1,0 +1,388 @@
+{
+  "asset_count": 2,
+  "assets": [
+    {
+      "code_contexts": [
+        {
+          "api_call_targets": [
+            "client.messages.create"
+          ],
+          "class_names": [],
+          "data_sink_types": [
+            "http"
+          ],
+          "data_source_types": [
+            "database",
+            "database",
+            "database",
+            "database",
+            "database",
+            "database",
+            "database",
+            "database",
+            "database",
+            "database"
+          ],
+          "env_vars": [],
+          "file_path": "sample_chatbot.py",
+          "function_names": [
+            "chat",
+            "load_history",
+            "save_to_db"
+          ],
+          "language": "python",
+          "model_names": [
+            "claude-sonnet-4-20250514"
+          ],
+          "prompt_count": 2,
+          "prompt_lengths": [
+            93,
+            93
+          ]
+        }
+      ],
+      "dependencies": [],
+      "discovered_via": [
+        "git_scanner"
+      ],
+      "file_paths": [
+        "sample_chatbot.py",
+        "sample_py.py"
+      ],
+      "name": "Anthropic (Claude) Integration",
+      "provider": "anthropic",
+      "raw_findings": [
+        {
+          "content": "sk-abcde...cdef",
+          "file_path": "sample_py.py",
+          "line_number": 8,
+          "provider": "openai",
+          "redacted_content": "sk-abcde...cdef",
+          "type": "api_key_detected"
+        },
+        {
+          "content": "import anthropic",
+          "file_path": "sample_chatbot.py",
+          "line_number": 3,
+          "provider": "anthropic",
+          "redacted_content": null,
+          "type": "import_detected"
+        },
+        {
+          "content": "import openai",
+          "file_path": "sample_py.py",
+          "line_number": 3,
+          "provider": "openai",
+          "redacted_content": null,
+          "type": "import_detected"
+        },
+        {
+          "content": "from anthropic import Anthropic",
+          "file_path": "sample_py.py",
+          "line_number": 4,
+          "provider": "anthropic",
+          "redacted_content": null,
+          "type": "import_detected"
+        },
+        {
+          "content": "from langchain_openai import ChatOpenAI",
+          "file_path": "sample_py.py",
+          "line_number": 5,
+          "provider": "langchain",
+          "redacted_content": null,
+          "type": "import_detected"
+        }
+      ],
+      "repository": "fixtures",
+      "risk_score": 0.85,
+      "tags": [
+        "chatbot"
+      ],
+      "task_types": [
+        "inference"
+      ],
+      "type": "custom_code"
+    },
+    {
+      "code_contexts": [
+        {
+          "api_call_targets": [
+            "client.chat.completions.create"
+          ],
+          "class_names": [],
+          "data_sink_types": [],
+          "data_source_types": [],
+          "env_vars": [
+            "AZURE_OPENAI_API_KEY",
+            "AZURE_OPENAI_DEPLOYMENT",
+            "AZURE_OPENAI_ENDPOINT"
+          ],
+          "file_path": "sprint2/azure_chat.py",
+          "function_names": [
+            "answer"
+          ],
+          "language": "python",
+          "model_names": [],
+          "prompt_count": 2,
+          "prompt_lengths": [
+            65,
+            65
+          ]
+        },
+        {
+          "api_call_targets": [],
+          "class_names": [],
+          "data_sink_types": [],
+          "data_source_types": [],
+          "env_vars": [],
+          "file_path": "sprint2/finetune_lora.py",
+          "function_names": [
+            "main"
+          ],
+          "language": "python",
+          "model_names": [],
+          "prompt_count": 0,
+          "prompt_lengths": []
+        }
+      ],
+      "dependencies": [],
+      "discovered_via": [
+        "git_scanner"
+      ],
+      "file_paths": [
+        "sprint2/azure_chat.py",
+        "sprint2/docker-compose.yml",
+        "sprint2/finetune_lora.py",
+        "sprint2/mcp.json",
+        "sprint2/tiny-llama.gguf"
+      ],
+      "name": "Sprint2",
+      "provider": "azure_openai",
+      "raw_findings": [
+        {
+          "content": "mcp server: filesystem",
+          "file_path": "sprint2/mcp.json",
+          "line_number": null,
+          "provider": "mcp",
+          "redacted_content": null,
+          "type": "config_detected"
+        },
+        {
+          "content": "mcp server: github",
+          "file_path": "sprint2/mcp.json",
+          "line_number": null,
+          "provider": "mcp",
+          "redacted_content": null,
+          "type": "config_detected"
+        },
+        {
+          "content": "Ollama runtime",
+          "file_path": "sprint2/docker-compose.yml",
+          "line_number": 4,
+          "provider": "ollama",
+          "redacted_content": null,
+          "type": "container_detected"
+        },
+        {
+          "content": "vLLM inference server",
+          "file_path": "sprint2/docker-compose.yml",
+          "line_number": 10,
+          "provider": "vllm",
+          "redacted_content": null,
+          "type": "container_detected"
+        },
+        {
+          "content": "Qdrant vector DB",
+          "file_path": "sprint2/docker-compose.yml",
+          "line_number": 13,
+          "provider": "qdrant",
+          "redacted_content": null,
+          "type": "container_detected"
+        },
+        {
+          "content": "from openai import AzureOpenAI",
+          "file_path": "sprint2/azure_chat.py",
+          "line_number": 4,
+          "provider": "azure_openai",
+          "redacted_content": null,
+          "type": "import_detected"
+        },
+        {
+          "content": "AZURE_OPENAI_ENDPOINT",
+          "file_path": "sprint2/azure_chat.py",
+          "line_number": 7,
+          "provider": "azure_openai",
+          "redacted_content": null,
+          "type": "import_detected"
+        },
+        {
+          "content": "from transformers import Trainer, TrainingArguments, AutoModelForCausalLM",
+          "file_path": "sprint2/finetune_lora.py",
+          "line_number": 4,
+          "provider": "huggingface",
+          "redacted_content": null,
+          "type": "import_detected"
+        },
+        {
+          "content": "tiny-llama.gguf (4 B)",
+          "file_path": "sprint2/tiny-llama.gguf",
+          "line_number": null,
+          "provider": "llamacpp",
+          "redacted_content": null,
+          "type": "local_model_detected"
+        }
+      ],
+      "repository": "fixtures",
+      "risk_score": 0.7,
+      "tags": [
+        "chatbot",
+        "fine_tuning",
+        "local_model",
+        "mcp",
+        "rag",
+        "training"
+      ],
+      "task_types": [
+        "fine_tuning"
+      ],
+      "type": "mcp_server"
+    }
+  ],
+  "errors": [],
+  "files_scanned": 8,
+  "insights": [
+    {
+      "asset_name": "Anthropic (Claude) Integration",
+      "category": "Chatbot & Conversation",
+      "data_involved": [
+        "Chat / Conversation",
+        "Database records"
+      ],
+      "provider_profile": {
+        "category": "llm_api",
+        "certifications": [
+          "SOC 2 Type II",
+          "HIPAA eligible",
+          "GDPR DPA available"
+        ],
+        "data_residency": [
+          "US"
+        ],
+        "description": "Claude model family API. Used for text generation, analysis, code, and agentic tasks.",
+        "display_name": "Anthropic (Claude)",
+        "docs_url": "https://docs.anthropic.com",
+        "enterprise_note": "Enterprise plan with DPA, SSO, admin controls, no training on data.",
+        "free_tier_risk": "Personal claude.ai usage may contribute data to training. API usage does not by default.",
+        "name": "anthropic",
+        "training_policy": "API: data not used for training by default. Free tier (claude.ai): data may be used. Enterprise: contractual guarantees.",
+        "vendor": "Anthropic, PBC"
+      },
+      "recommendations": [
+        "Move API keys to environment variables or a secret manager (e.g., HashiCorp Vault, AWS Secrets Manager, Azure Key Vault).",
+        "Rotate the exposed key(s) immediately — they may already be compromised if the repository has been shared or is public.",
+        "Add API key patterns to your .gitignore and pre-commit hooks.",
+        "Verify GDPR compliance: ensure a DPA is signed with the provider and data residency is configured for EU region if required.",
+        "Consider enterprise tier: Enterprise plan with DPA, SSO, admin controls, no training on data.",
+        "Confirm which tier/plan is being used. Switch to a paid API or enterprise plan with contractual opt-out from data training."
+      ],
+      "risk_reasons": [
+        {
+          "detail": "Found 1 API key directly in code (sample_py.py). Anyone with repository access can extract and misuse these keys. Keys should be stored in environment variables or a secret manager.",
+          "severity": "critical",
+          "title": "Hardcoded API key in source code"
+        },
+        {
+          "detail": "Anthropic (Claude) processes data in: US. If your organization is subject to GDPR or data residency requirements, verify that a Data Processing Agreement (DPA) is in place and data residency is configured appropriately.",
+          "severity": "warning",
+          "title": "Data may leave the EU"
+        },
+        {
+          "detail": "Anthropic (Claude) training policy: API: data not used for training by default. Free tier (claude.ai): data may be used. Enterprise: contractual guarantees. Verify which tier/plan is being used and whether data opt-out is configured.",
+          "severity": "warning",
+          "title": "Data may be used for model training"
+        },
+        {
+          "detail": "This integration sends data to Anthropic (Claude) (Anthropic, PBC) for processing. Data is transmitted outside your infrastructure. Vendor: Anthropic, PBC.",
+          "severity": "info",
+          "title": "Data sent to external AI API"
+        }
+      ],
+      "solution_name": "History",
+      "summary": "You are Fleurdin, a helpful florist assistant specialized in essential oils and aromatherapy. API endpoints: chat(). Reads from: database, database (MESSAGES). Outputs to: external API ().",
+      "tech_stack": [
+        "Anthropic (Claude)",
+        "LangChain",
+        "OpenAI",
+        "SQLite"
+      ]
+    },
+    {
+      "asset_name": "Sprint2",
+      "category": "Fine-tuning & Training",
+      "data_involved": [
+        "Chat / Conversation"
+      ],
+      "provider_profile": {
+        "category": "llm_api",
+        "certifications": [
+          "SOC 1/2/3",
+          "ISO 27001",
+          "HIPAA",
+          "FedRAMP High",
+          "GDPR DPA"
+        ],
+        "data_residency": [
+          "customer-selected Azure region (EU, US, UK, …)"
+        ],
+        "description": "OpenAI models (GPT-4, GPT-4o, embeddings) hosted in Azure tenants with private networking, separate DPA and regional deployment control.",
+        "display_name": "Azure OpenAI",
+        "docs_url": "https://learn.microsoft.com/azure/ai-services/openai/",
+        "enterprise_note": "Private endpoints, VNet integration, Customer-Managed Keys, Azure AD auth, content filtering configurable.",
+        "free_tier_risk": "No free tier. Access requires an Azure subscription and Microsoft application approval.",
+        "name": "azure_openai",
+        "training_policy": "Data is NOT sent to OpenAI and is NOT used to train models. Stays within the customer's Azure tenant.",
+        "vendor": "Microsoft Azure"
+      },
+      "recommendations": [
+        "Review what data is being sent to the API. Ensure no PII, confidential, or regulated data is transmitted without appropriate controls."
+      ],
+      "risk_reasons": [
+        {
+          "detail": "This integration sends data to Azure OpenAI (Microsoft Azure) for processing. Data is transmitted outside your infrastructure. Vendor: Microsoft Azure.",
+          "severity": "warning",
+          "title": "Data sent to external AI API"
+        },
+        {
+          "detail": "This asset appears to fine-tuning a model. Training pipelines typically consume real production data (logs, customer messages, documents), so they carry higher privacy, IP-leakage and compute-cost risk than plain inference. Verify data provenance, access controls on the training set, and that resulting model weights are stored in a governed artifact repository.",
+          "severity": "warning",
+          "title": "Fine-tuning pipeline ingests training data"
+        },
+        {
+          "detail": "Model Context Protocol server(s) give an LLM application privileged access to local tools, filesystems or remote APIs. Each configured server is a potential data-exfiltration vector and should be audited individually. Configured servers: filesystem, github.",
+          "severity": "warning",
+          "title": "MCP servers expose tool access to the model"
+        },
+        {
+          "detail": "Docker/Compose files declare an AI runtime or vector store: Ollama runtime, Qdrant vector DB, vLLM inference server. Self-hosting keeps data on-prem but requires you to patch the runtime, monitor resource use, and secure the management endpoints.",
+          "severity": "info",
+          "title": "Self-hosted AI runtime detected in container manifest"
+        },
+        {
+          "detail": "Found 1 model weight file(s) (.gguf/.safetensors/.onnx/…) tracked in source control. Large binaries bloat the repo and are often better served via a model registry or Git LFS; verify licensing of the underlying model.",
+          "severity": "info",
+          "title": "Local model weights committed to repository"
+        }
+      ],
+      "solution_name": "An internal support assistant for the FleurCorp helpdesk",
+      "summary": "Role: \"an internal support assistant for the FleurCorp helpdesk\". Key functions: answer. AI calls: client.chat.completions.create.",
+      "tech_stack": [
+        "Azure OpenAI",
+        "Hugging Face",
+        "Model Context Protocol",
+        "Ollama",
+        "Qdrant"
+      ]
+    }
+  ],
+  "scanner": "git_scanner"
+}

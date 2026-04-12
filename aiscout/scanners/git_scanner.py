@@ -3,7 +3,9 @@
 from __future__ import annotations
 
 import json
+import os
 import re
+import stat
 import tempfile
 import tomllib
 from collections import defaultdict
@@ -34,6 +36,22 @@ SCAN_EXTENSIONS = {
     ".yaml", ".yml", ".toml", ".json", ".env", ".ipynb",
 }
 
+# Sprint 2 — local model weight/artifact extensions. Contents are never read
+# (binary files up to GB in size); only path + size recorded.
+LOCAL_MODEL_EXTENSIONS = {
+    ".gguf", ".ggml", ".safetensors", ".onnx", ".bin",
+    ".pt", ".pth", ".ckpt", ".tflite", ".mlmodel",
+}
+
+# Sprint 2 — config / manifest files that aren't in SCAN_EXTENSIONS via suffix
+# alone (either they have no extension like "Dockerfile", or the name carries
+# the signal such as "mcp.json").
+SPECIAL_FILENAMES = {
+    "Dockerfile", "Containerfile",
+    "docker-compose.yml", "docker-compose.yaml", "compose.yml", "compose.yaml",
+    "mcp.json", ".mcp.json", "claude_desktop_config.json",
+}
+
 SKIP_DIRS = {
     ".git", "node_modules", "__pycache__", ".venv", "venv", "dist", "build",
 }
@@ -42,10 +60,63 @@ DEPENDENCY_FILES = {
     "requirements.txt", "pyproject.toml", "setup.py", "package.json",
 }
 
+# Sprint 2 — Docker/Compose image patterns that signal a self-hosted AI
+# runtime. Value is the provider key surfaced in findings.
+_CONTAINER_IMAGE_PATTERNS: list[tuple[re.Pattern, str, str]] = [
+    (re.compile(r"ollama/ollama", re.IGNORECASE), "ollama", "Ollama runtime"),
+    (re.compile(r"\bvllm/\w+", re.IGNORECASE), "vllm", "vLLM inference server"),
+    (re.compile(r"vllm/vllm-openai", re.IGNORECASE), "vllm", "vLLM OpenAI-compatible server"),
+    (re.compile(r"ghcr\.io/huggingface/text-generation-inference|huggingface/text-generation-inference", re.IGNORECASE), "huggingface", "HF Text Generation Inference (TGI)"),
+    (re.compile(r"nvcr\.io/nvidia/tritonserver|tritonserver", re.IGNORECASE), "triton", "NVIDIA Triton"),
+    (re.compile(r"localai/localai|quay\.io/go-skynet/local-ai", re.IGNORECASE), "localai", "LocalAI"),
+    (re.compile(r"ghcr\.io/ggerganov/llama\.cpp|llama\.cpp", re.IGNORECASE), "llamacpp", "llama.cpp"),
+    (re.compile(r"qdrant/qdrant", re.IGNORECASE), "qdrant", "Qdrant vector DB"),
+    (re.compile(r"chromadb/chroma", re.IGNORECASE), "chromadb", "Chroma vector DB"),
+    (re.compile(r"weaviate/weaviate", re.IGNORECASE), "weaviate", "Weaviate vector DB"),
+    (re.compile(r"milvusdb/milvus", re.IGNORECASE), "milvus", "Milvus vector DB"),
+    (re.compile(r"langfuse/langfuse", re.IGNORECASE), "langfuse", "Langfuse observability"),
+    (re.compile(r"open-webui/open-webui", re.IGNORECASE), "open-webui", "Open WebUI"),
+]
+
+# Sprint 2 — detect training vs inference from code body keywords.
+_TRAINING_MARKERS = re.compile(
+    r"\b("
+    r"Trainer\s*\(|TrainingArguments|SFTTrainer|DPOTrainer|PPOTrainer|"
+    r"model\.fit\(|model\.train\(\)|\.backward\(\)|\.step\(\)|"
+    r"loss\.backward|optimizer\.step|"
+    r"AdamW|torch\.optim|lr_scheduler|peft|LoraConfig|get_peft_model|"
+    r"accelerate\.Accelerator|deepspeed|fsdp"
+    r")\b"
+)
+_EVALUATION_MARKERS = re.compile(
+    r"\b("
+    r"model\.eval\(\)|evaluate\.load|sklearn\.metrics|classification_report|"
+    r"confusion_matrix|compute_metrics|rouge_score|bleu_score|"
+    r"Trainer\.evaluate|lm-eval|lm_eval"
+    r")\b"
+)
+
 # ── AI Import Patterns ────────────────────────────────────────────────────
 # provider -> list of regex patterns (compiled at module load)
 
 _AI_IMPORT_PATTERNS: dict[str, list[str]] = {
+    # Azure OpenAI listed BEFORE "openai" so the more specific match wins
+    # during detection (see _detect_imports loop which returns the first hit).
+    "azure_openai": [
+        r"^(?:import|from)\s+openai\s+import\s+AzureOpenAI\b",
+        r"^(?:import|from)\s+openai\s+import\s+AsyncAzureOpenAI\b",
+        r"\bAzureOpenAI\s*\(",
+        r"\bAsyncAzureOpenAI\s*\(",
+        r"require\(\s*['\"]@azure/openai['\"]\s*\)",
+        r"from\s+['\"]@azure/openai['\"]",
+    ],
+    "mcp": [
+        r"^(?:import|from)\s+mcp\b",
+        r"^(?:import|from)\s+mcp\.server\b",
+        r"^(?:import|from)\s+mcp\.client\b",
+        r"require\(\s*['\"]@modelcontextprotocol/sdk['\"]\s*\)",
+        r"from\s+['\"]@modelcontextprotocol/sdk",
+    ],
     "openai": [
         r"^(?:import|from)\s+openai\b",
         r"require\(\s*['\"]openai['\"]\s*\)",
@@ -142,6 +213,7 @@ API_KEY_PATTERNS: list[tuple[str, re.Pattern, str]] = [
 # ── AI Package Names ─────────────────────────────────────────────────────
 
 AI_PYTHON_PACKAGES = {
+    "mcp", "fastmcp",
     "openai", "anthropic", "langchain", "langchain-core", "langchain-community",
     "langchain-openai", "langchain-anthropic", "llama-index", "llamaindex",
     "transformers", "huggingface-hub", "diffusers", "accelerate", "datasets",
@@ -158,6 +230,7 @@ AI_PYTHON_PACKAGES = {
 }
 
 AI_NPM_PACKAGES = {
+    "@modelcontextprotocol/sdk", "@azure/openai",
     "openai", "@anthropic-ai/sdk", "langchain", "@langchain/core",
     "@langchain/openai", "@langchain/anthropic",
     "@huggingface/inference", "@huggingface/hub",
@@ -214,11 +287,18 @@ class GitScanner(BaseScanner):
 
             for file_path in self._walk_files(root):
                 files_scanned += 1
+                rel_path = str(file_path.relative_to(root))
+
+                # ── Local model artifacts — never read content ──
+                if file_path.suffix.lower() in LOCAL_MODEL_EXTENSIONS:
+                    all_findings.append(
+                        self._local_model_finding(file_path, rel_path)
+                    )
+                    continue
+
                 content = self._read_file(file_path)
                 if content is None:
                     continue
-
-                rel_path = str(file_path.relative_to(root))
 
                 # For .ipynb files, extract source code from cells
                 if file_path.suffix == ".ipynb":
@@ -226,9 +306,30 @@ class GitScanner(BaseScanner):
                     if not content:
                         continue
 
-                # Run detectors
+                # ── Docker / compose manifests ──
+                if file_path.name in {
+                    "Dockerfile", "Containerfile",
+                    "docker-compose.yml", "docker-compose.yaml",
+                    "compose.yml", "compose.yaml",
+                }:
+                    all_findings.extend(
+                        self._detect_containers(rel_path, content)
+                    )
+                    continue
+
+                # ── MCP config files ──
+                if file_path.name in {
+                    "mcp.json", ".mcp.json", "claude_desktop_config.json",
+                }:
+                    all_findings.extend(
+                        self._detect_mcp_config(rel_path, content)
+                    )
+                    continue
+
+                # Run code detectors
                 all_findings.extend(self._detect_imports(rel_path, content))
                 all_findings.extend(self._detect_api_keys(rel_path, content))
+                all_findings.extend(self._detect_azure_openai_config(rel_path, content))
 
                 # Dependency files get special treatment
                 if file_path.name in DEPENDENCY_FILES:
@@ -270,46 +371,105 @@ class GitScanner(BaseScanner):
     # ── Private helpers ────────────────────────────────────────────────
 
     def _resolve_repo(self) -> tuple[Path, callable | None, str]:
-        """Resolve repo source. Returns (root_path, cleanup_fn, repo_name)."""
+        """Resolve repo source. Returns (root_path, cleanup_fn, repo_name).
+
+        Security:
+          * Remote clones use a ``TemporaryDirectory`` with 0700 perms so the
+            working copy is never world-readable and is removed on interpreter
+            exit even if the scanner crashes.
+          * Git credentials are passed via ``GIT_ASKPASS`` instead of being
+            embedded in the clone URL — tokens never appear in process args,
+            GitPython error strings, or the cloned repo's ``.git/config``.
+        """
         if self.repo_path:
             root = Path(self.repo_path).resolve()
             repo_name = root.name
             return root, None, repo_name
 
         if self.repo_url:
-            tmpdir = tempfile.mkdtemp(prefix="aiscout_")
-            url = self.repo_url
-            if self.token and "://" in url:
-                # Embed token: https://TOKEN@github.com/org/repo
-                proto, rest = url.split("://", 1)
-                url = f"{proto}://{self.token}@{rest}"
-
-            git.Repo.clone_from(url, tmpdir, branch=self.branch, depth=10)
             repo_name = self.repo_url.rstrip("/").split("/")[-1].removesuffix(".git")
+            tmp = tempfile.TemporaryDirectory(prefix="aiscout_")
+            try:
+                os.chmod(tmp.name, 0o700)
+            except OSError:
+                pass
+
+            env = {
+                "GIT_TERMINAL_PROMPT": "0",  # never block on tty auth prompt
+                "GIT_ASKPASS": "/bin/echo",  # safe default if token absent
+            }
+            askpass_path: str | None = None
+            if self.token:
+                askpass_path = _write_askpass_helper(tmp.name)
+                env["GIT_ASKPASS"] = askpass_path
+                env["AISCOUT_GIT_TOKEN"] = self.token
+
+            try:
+                git.Repo.clone_from(
+                    self.repo_url,
+                    tmp.name,
+                    branch=self.branch,
+                    depth=10,
+                    env=env,
+                )
+            except Exception:
+                tmp.cleanup()
+                raise
+            finally:
+                if askpass_path:
+                    try:
+                        os.unlink(askpass_path)
+                    except OSError:
+                        pass
 
             def cleanup():
-                import shutil
-                shutil.rmtree(tmpdir, ignore_errors=True)
+                tmp.cleanup()
 
-            return Path(tmpdir), cleanup, repo_name
+            return Path(tmp.name).resolve(), cleanup, repo_name
 
         raise ValueError("Either repo_path or repo_url must be provided")
 
     def _walk_files(self, root: Path):
-        """Yield files matching scan criteria."""
-        for path in root.rglob("*"):
-            if any(skip in path.parts for skip in SKIP_DIRS):
-                continue
-            if not path.is_file():
-                continue
-            if path.suffix not in SCAN_EXTENSIONS:
-                continue
-            try:
-                if path.stat().st_size > MAX_FILE_SIZE:
+        """Yield files matching scan criteria.
+
+        Security: symlinks are skipped entirely, and each candidate path is
+        resolved and checked to be strictly inside ``root`` so a malicious
+        repository cannot trick the scanner into reading ``/etc/passwd`` or
+        files outside the working copy.
+        """
+        root_resolved = root.resolve()
+        for dirpath, dirnames, filenames in os.walk(
+            root, topdown=True, followlinks=False
+        ):
+            # Prune skipped dirs in-place so os.walk doesn't descend into them
+            dirnames[:] = [d for d in dirnames if d not in SKIP_DIRS]
+            dir_path = Path(dirpath)
+            for name in filenames:
+                path = dir_path / name
+                if any(skip in path.parts for skip in SKIP_DIRS):
                     continue
-            except OSError:
-                continue
-            yield path
+
+                is_code = path.suffix in SCAN_EXTENSIONS
+                is_special = name in SPECIAL_FILENAMES
+                is_model = path.suffix.lower() in LOCAL_MODEL_EXTENSIONS
+                if not (is_code or is_special or is_model):
+                    continue
+
+                try:
+                    if path.is_symlink():
+                        continue
+                    st = path.lstat()
+                    if not stat.S_ISREG(st.st_mode):
+                        continue
+                    # Model weights are allowed to be huge — we never read them.
+                    if not is_model and st.st_size > MAX_FILE_SIZE:
+                        continue
+                    # Guard against path-traversal via intermediate symlinks
+                    resolved = path.resolve()
+                    resolved.relative_to(root_resolved)
+                except (OSError, ValueError):
+                    continue
+                yield path
 
     def _read_file(self, path: Path) -> str | None:
         """Read file content, returning None on failure."""
@@ -358,44 +518,181 @@ class GitScanner(BaseScanner):
                 asset.users = sorted(authors)
 
     def _detect_imports(self, file_path: str, content: str) -> list[Finding]:
-        """Detect AI-related imports in source code."""
+        """Detect AI-related imports in source code.
+
+        Per line, the first (most specific) provider listed in
+        ``AI_IMPORT_PATTERNS`` wins. This lets e.g. ``azure_openai`` be
+        detected on a line like ``from openai import AzureOpenAI`` without
+        also emitting a generic ``openai`` finding for the same line.
+        """
         findings = []
         lines = content.splitlines()
+        claimed_lines: set[int] = set()
+        # Track provider-per-file de-dup so we don't emit 40 findings for the
+        # same package across a 400-line module.
+        seen_provider_in_file: set[str] = set()
 
         for provider, patterns in AI_IMPORT_PATTERNS.items():
+            matched_line = None
             for pattern in patterns:
                 for match in pattern.finditer(content):
                     line_num = content[:match.start()].count("\n") + 1
-                    line_text = lines[line_num - 1].strip() if line_num <= len(lines) else ""
-                    findings.append(Finding(
-                        type=FindingType.IMPORT_DETECTED,
-                        file_path=file_path,
-                        line_number=line_num,
-                        content=line_text,
-                        provider=provider,
-                    ))
-                    break  # One match per pattern set per provider is enough
+                    if line_num in claimed_lines:
+                        continue
+                    matched_line = line_num
+                    break
+                if matched_line:
+                    break
+            if matched_line and provider not in seen_provider_in_file:
+                line_text = (
+                    lines[matched_line - 1].strip()
+                    if matched_line <= len(lines) else ""
+                )
+                findings.append(Finding(
+                    type=FindingType.IMPORT_DETECTED,
+                    file_path=file_path,
+                    line_number=matched_line,
+                    content=line_text,
+                    provider=provider,
+                ))
+                claimed_lines.add(matched_line)
+                seen_provider_in_file.add(provider)
 
         return findings
 
     def _detect_api_keys(self, file_path: str, content: str) -> list[Finding]:
-        """Detect hardcoded API keys using regex patterns."""
+        """Detect hardcoded API keys using regex patterns.
+
+        Security: raw keys are never stored in the Finding. Both `content` and
+        `redacted_content` receive the redacted form so that downstream code
+        (LLM prompts, report templates, logs) cannot accidentally leak secrets.
+        """
         findings = []
-        lines = content.splitlines()
 
         for provider, pattern, description in API_KEY_PATTERNS:
             for match in pattern.finditer(content):
                 key = match.group()
+                redacted = _redact_key(key)
                 line_num = content[:match.start()].count("\n") + 1
                 findings.append(Finding(
                     type=FindingType.API_KEY_DETECTED,
                     file_path=file_path,
                     line_number=line_num,
-                    content=key,
-                    redacted_content=_redact_key(key),
+                    content=redacted,
+                    redacted_content=redacted,
                     provider=provider,
                 ))
 
+        return findings
+
+    # ── Sprint 2 detectors ─────────────────────────────────────────────
+
+    def _local_model_finding(self, full_path: Path, rel_path: str) -> Finding:
+        """Record the presence of a local model weight artifact.
+
+        We never load the file. Only its relative path and size are
+        stored, so scanning a 70 GB .gguf never spikes memory.
+        """
+        try:
+            size = full_path.stat().st_size
+        except OSError:
+            size = 0
+        return Finding(
+            type=FindingType.LOCAL_MODEL_DETECTED,
+            file_path=rel_path,
+            content=f"{full_path.name} ({_human_size(size)})",
+            provider=_model_ext_to_provider(full_path.suffix.lower()),
+        )
+
+    def _detect_containers(self, file_path: str, content: str) -> list[Finding]:
+        """Detect AI runtime / vector DB images in Dockerfile & compose files."""
+        findings: list[Finding] = []
+        seen: set[str] = set()
+        for pattern, provider, label in _CONTAINER_IMAGE_PATTERNS:
+            match = pattern.search(content)
+            if not match:
+                continue
+            if provider in seen:
+                continue
+            seen.add(provider)
+            line_num = content[:match.start()].count("\n") + 1
+            findings.append(Finding(
+                type=FindingType.CONTAINER_DETECTED,
+                file_path=file_path,
+                line_number=line_num,
+                content=label,
+                provider=provider,
+            ))
+        return findings
+
+    def _detect_mcp_config(self, file_path: str, content: str) -> list[Finding]:
+        """Detect MCP server configuration files.
+
+        Every ``mcpServers`` entry in the config becomes one finding. The
+        server name goes into ``content`` so the asset card can list each
+        configured tool explicitly.
+        """
+        findings: list[Finding] = []
+        try:
+            data = json.loads(content)
+        except json.JSONDecodeError:
+            return findings
+        servers = {}
+        if isinstance(data, dict):
+            servers = data.get("mcpServers") or data.get("mcp_servers") or {}
+        if not isinstance(servers, dict):
+            return findings
+        for name in sorted(servers.keys()):
+            findings.append(Finding(
+                type=FindingType.CONFIG_DETECTED,
+                file_path=file_path,
+                content=f"mcp server: {name}",
+                provider="mcp",
+            ))
+        if not findings and isinstance(data, dict):
+            # Config file exists but has no server entries — still record it
+            # so the report surfaces "MCP config present but empty".
+            findings.append(Finding(
+                type=FindingType.CONFIG_DETECTED,
+                file_path=file_path,
+                content="mcp config (no servers)",
+                provider="mcp",
+            ))
+        return findings
+
+    def _detect_azure_openai_config(
+        self, file_path: str, content: str
+    ) -> list[Finding]:
+        """Detect Azure OpenAI usage that isn't caught by import patterns.
+
+        The Python ``openai`` SDK is shared with Azure — many codebases use
+        ``from openai import AzureOpenAI`` (caught by imports) but some
+        configure Azure implicitly via env vars or kwargs. This scan
+        surfaces those, producing an ``azure_openai`` import-type finding
+        so the asset's provider is correctly attributed to Azure rather
+        than OpenAI.
+        """
+        findings: list[Finding] = []
+        markers = (
+            "AZURE_OPENAI_ENDPOINT",
+            "AZURE_OPENAI_API_KEY",
+            "azure_endpoint=",
+            "AZURE_OPENAI_DEPLOYMENT",
+            "api_type='azure'",
+            'api_type="azure"',
+        )
+        for marker in markers:
+            idx = content.find(marker)
+            if idx >= 0:
+                line_num = content[:idx].count("\n") + 1
+                findings.append(Finding(
+                    type=FindingType.IMPORT_DETECTED,
+                    file_path=file_path,
+                    line_number=line_num,
+                    content=marker,
+                    provider="azure_openai",
+                ))
+                break  # one per file is enough
         return findings
 
     def _scan_dependencies(
@@ -515,20 +812,39 @@ class GitScanner(BaseScanner):
             file_paths = sorted({f.file_path for f in dir_findings})
             # Collect unique providers used in this solution
             providers = sorted({f.provider for f in dir_findings if f.provider})
-            primary_provider = providers[0] if providers else ""
+            primary_provider = _pick_primary_provider(providers)
             # Collect dependencies
             deps = sorted({
                 f.content for f in dir_findings
                 if f.type == FindingType.DEPENDENCY_DETECTED
             })
-            # Check for API keys
+            # Category bookkeeping
             has_api_keys = any(
                 f.type == FindingType.API_KEY_DETECTED for f in dir_findings
+            )
+            has_mcp = any(f.provider == "mcp" for f in dir_findings)
+            has_local_model = any(
+                f.type == FindingType.LOCAL_MODEL_DETECTED for f in dir_findings
+            )
+            has_container = any(
+                f.type == FindingType.CONTAINER_DETECTED for f in dir_findings
             )
 
             risk = 0.3
             if has_api_keys:
                 risk = 0.7
+            if has_mcp:
+                risk = max(risk, 0.5)
+            if has_local_model:
+                risk = max(risk, 0.4)
+
+            asset_type = AssetType.CUSTOM_CODE
+            if has_mcp:
+                asset_type = AssetType.MCP_SERVER
+            elif has_local_model and not any(
+                f.type == FindingType.IMPORT_DETECTED for f in dir_findings
+            ):
+                asset_type = AssetType.LOCAL_MODEL
 
             solution_name = _derive_solution_name(file_paths, primary_provider, repo_name)
 
@@ -538,7 +854,7 @@ class GitScanner(BaseScanner):
 
             assets.append(AIAsset(
                 name=solution_name,
-                type=AssetType.CUSTOM_CODE,
+                type=asset_type,
                 provider=provider_info,
                 risk_score=risk,
                 discovered_via=["git_scanner"],
@@ -569,6 +885,86 @@ class GitScanner(BaseScanner):
 # ── Module-level helpers ──────────────────────────────────────────────────
 
 
+def _write_askpass_helper(tmp_dir: str) -> str:
+    """Write a short-lived GIT_ASKPASS helper script.
+
+    The helper echoes ``$AISCOUT_GIT_TOKEN`` — the token itself is passed via
+    the per-subprocess ``env`` dict handed to ``clone_from``, never touching
+    the parent process environment, the clone URL, or the helper file on
+    disk. The script is created with 0700 permissions in the scanner's temp
+    dir (itself 0700) and is unlinked as soon as clone returns.
+    """
+    fd, path = tempfile.mkstemp(prefix="askpass_", suffix=".sh", dir=tmp_dir)
+    try:
+        with os.fdopen(fd, "w") as f:
+            f.write("#!/bin/sh\nprintf '%s' \"$AISCOUT_GIT_TOKEN\"\n")
+        os.chmod(path, 0o700)
+    except Exception:
+        os.unlink(path)
+        raise
+    return path
+
+
+# More-specific providers supersede their generic parent so the asset card
+# attributes data flow to the real destination (e.g. Azure tenant, not
+# "OpenAI"). These entries only affect tie-breaking when BOTH providers
+# show up in the same asset; they do not re-order unrelated providers.
+_PROVIDER_SUPERSEDES = {
+    "azure_openai": "openai",
+}
+
+_FRAMEWORK_PROVIDERS = {"langchain", "llamaindex", "semantic-kernel", "mcp"}
+
+
+def _pick_primary_provider(providers: list[str]) -> str:
+    """Pick the provider shown prominently on the asset card.
+
+    Rules (in order):
+    1. If a provider supersedes another present one (Azure OpenAI over
+       OpenAI), drop the superseded provider.
+    2. Prefer direct LLM/vector providers over generic frameworks
+       (LangChain wraps the real destination — LangChain alone is
+       uninformative for residency questions).
+    3. Fall back to alphabetical order for deterministic ties.
+    """
+    if not providers:
+        return ""
+    pool = set(providers)
+    for specific, general in _PROVIDER_SUPERSEDES.items():
+        if specific in pool and general in pool:
+            pool.discard(general)
+    concrete = sorted(p for p in pool if p not in _FRAMEWORK_PROVIDERS)
+    if concrete:
+        return concrete[0]
+    return sorted(pool)[0]
+
+
+def _human_size(num_bytes: int) -> str:
+    """Format a byte count as a short human-readable string."""
+    step = 1024.0
+    for unit in ("B", "KB", "MB", "GB", "TB"):
+        if num_bytes < step or unit == "TB":
+            return f"{num_bytes:.1f} {unit}" if unit != "B" else f"{int(num_bytes)} B"
+        num_bytes /= step
+    return f"{num_bytes:.1f} TB"
+
+
+def _model_ext_to_provider(ext: str) -> str:
+    """Map a local model extension to the most-likely runtime/framework."""
+    return {
+        ".gguf": "llamacpp",
+        ".ggml": "llamacpp",
+        ".safetensors": "huggingface",
+        ".onnx": "onnx",
+        ".bin": "huggingface",
+        ".pt": "pytorch",
+        ".pth": "pytorch",
+        ".ckpt": "pytorch",
+        ".tflite": "tflite",
+        ".mlmodel": "coreml",
+    }.get(ext, "local_model")
+
+
 def _redact_key(key: str) -> str:
     """Redact an API key, showing only first 8 and last 4 characters."""
     if len(key) <= 12:
@@ -579,6 +975,9 @@ def _redact_key(key: str) -> str:
 def _package_to_provider(pkg: str) -> str:
     """Map a package name to a provider name."""
     mapping = {
+        "mcp": "mcp", "fastmcp": "mcp",
+        "@modelcontextprotocol/sdk": "mcp",
+        "@azure/openai": "azure_openai",
         "openai": "openai",
         "anthropic": "anthropic",
         "langchain": "langchain", "langchain-core": "langchain",

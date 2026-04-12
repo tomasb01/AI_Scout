@@ -69,6 +69,15 @@ table.ov tr.expanded{background:var(--surface2)}
 .badge.warning{background:var(--warning-bg);color:var(--warning)}
 .badge.ok{background:var(--ok-bg);color:var(--ok)}
 .tech-tag{display:inline-block;font-size:.65rem;padding:.05rem .35rem;border-radius:3px;background:var(--accent-bg);color:var(--accent);margin:.1rem .1rem}
+.task-tag{display:inline-block;font-size:.6rem;padding:.05rem .35rem;border-radius:3px;margin:.1rem .1rem;font-weight:600;text-transform:uppercase;letter-spacing:.02em}
+.task-tag.t-chatbot{background:#1e3a8a22;color:#60a5fa}
+.task-tag.t-rag{background:#7c3aed22;color:#a78bfa}
+.task-tag.t-agent{background:#db277722;color:#f472b6}
+.task-tag.t-training,.task-tag.t-fine_tuning{background:#dc262622;color:#f87171}
+.task-tag.t-evaluation{background:#ca8a0422;color:#fbbf24}
+.task-tag.t-transcription,.task-tag.t-image_generation{background:#059669aa22;color:#34d399}
+.task-tag.t-local_model{background:#16a34a22;color:#4ade80}
+.task-tag.t-mcp{background:#9333ea22;color:#c084fc}
 .data-tag{display:inline-block;font-size:.65rem;padding:.05rem .35rem;border-radius:3px;background:var(--purple-bg);color:var(--purple);margin:.1rem .1rem}
 
 /* Detail panel */
@@ -405,6 +414,11 @@ footer{text-align:center;color:var(--text-dim);font-size:.65rem;margin-top:2rem;
 <tr class="sol-row" data-risk="{{ risk }}" data-repo="{{ asset.repository }}" data-cat="{{ cat }}" data-id="{{ asset.id }}">
   <td>
     <div class="sol-name">{{ insight.solution_name if insight and insight.solution_name else asset.name }}</div>
+    {% if asset.tags %}
+    <div style="margin-top:.15rem">
+      {% for tag in asset.tags %}<span class="task-tag t-{{ tag }}">{{ tag | replace('_',' ') }}</span>{% endfor %}
+    </div>
+    {% endif %}
     <div class="sol-desc">{{ insight.summary[:120] if insight else '' }}{% if insight and insight.summary | length > 120 %}...{% endif %}</div>
   </td>
   <td style="font-size:.75rem;color:var(--text-muted)">{{ asset.repository }}</td>
@@ -503,7 +517,7 @@ footer{text-align:center;color:var(--text-dim);font-size:.65rem;margin-top:2rem;
       {% for f in asset.raw_findings[:8] %}
       <div class="finding">
         <span class="ft {% if f.type == FindingType.IMPORT_DETECTED %}f-import{% elif f.type == FindingType.API_KEY_DETECTED %}f-api_key{% else %}f-dependency{% endif %}">{{ f.type.value | replace('_', ' ') }}</span>
-        {{ f.file_path }}{% if f.line_number %}:{{ f.line_number }}{% endif %} — {{ f.redacted_content if f.redacted_content else f.content }}
+        {{ f.file_path }}{% if f.line_number %}:{{ f.line_number }}{% endif %} — {% if f.type == FindingType.API_KEY_DETECTED %}{{ f.redacted_content or '<redacted>' }}{% else %}{{ f.redacted_content if f.redacted_content else f.content }}{% endif %}
       </div>
       {% endfor %}
       {% if asset.raw_findings | length > 8 %}

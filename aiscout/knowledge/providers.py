@@ -363,6 +363,32 @@ PROVIDERS: dict[str, ProviderProfile] = {
         enterprise_note="Self-hosted by design. No cloud component.",
         docs_url="https://faiss.ai",
     ),
+    "azure_openai": ProviderProfile(
+        name="azure_openai",
+        display_name="Azure OpenAI",
+        category="llm_api",
+        description="OpenAI models (GPT-4, GPT-4o, embeddings) hosted in Azure tenants with private networking, separate DPA and regional deployment control.",
+        vendor="Microsoft Azure",
+        data_residency=["customer-selected Azure region (EU, US, UK, …)"],
+        training_policy="Data is NOT sent to OpenAI and is NOT used to train models. Stays within the customer's Azure tenant.",
+        certifications=["SOC 1/2/3", "ISO 27001", "HIPAA", "FedRAMP High", "GDPR DPA"],
+        free_tier_risk="No free tier. Access requires an Azure subscription and Microsoft application approval.",
+        enterprise_note="Private endpoints, VNet integration, Customer-Managed Keys, Azure AD auth, content filtering configurable.",
+        docs_url="https://learn.microsoft.com/azure/ai-services/openai/",
+    ),
+    "mcp": ProviderProfile(
+        name="mcp",
+        display_name="Model Context Protocol",
+        category="framework",
+        description="Open protocol for connecting LLM applications to external tools, data sources and capabilities. MCP servers expose tools to Claude Desktop, IDE agents and custom clients.",
+        vendor="Anthropic (open protocol)",
+        data_residency=["depends on the MCP server implementation"],
+        training_policy="Protocol itself does not transmit data anywhere. Data handling depends entirely on the individual MCP server and the client that connects to it.",
+        certifications=[],
+        free_tier_risk="Unvetted third-party MCP servers may exfiltrate tool-call arguments or file contents. Review each server before enabling.",
+        enterprise_note="Treat MCP servers like any other privileged integration: audit their code, restrict filesystem/network scope, log tool invocations.",
+        docs_url="https://modelcontextprotocol.io",
+    ),
 }
 
 # ── Fallback for unknown providers ────────────────────────────────────────

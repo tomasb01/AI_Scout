@@ -21,6 +21,20 @@ class AssetType(StrEnum):
     MCP_SERVER = "mcp_server"
 
 
+class TaskType(StrEnum):
+    """What the code *does* with the AI model.
+
+    Used to distinguish inference from training/fine-tuning, which have
+    very different data-privacy and compute implications.
+    """
+
+    INFERENCE = "inference"
+    TRAINING = "training"
+    FINE_TUNING = "fine_tuning"
+    EVALUATION = "evaluation"
+    UNKNOWN = "unknown"
+
+
 class Confidence(StrEnum):
     HIGH = "high"
     MEDIUM = "medium"
@@ -47,6 +61,9 @@ class FindingType(StrEnum):
     IMPORT_DETECTED = "import_detected"
     API_KEY_DETECTED = "api_key_detected"
     DEPENDENCY_DETECTED = "dependency_detected"
+    CONFIG_DETECTED = "config_detected"
+    LOCAL_MODEL_DETECTED = "local_model_detected"
+    CONTAINER_DETECTED = "container_detected"
 
 
 # ── Helper models ──────────────────────────────────────────────────────────
@@ -124,6 +141,8 @@ class AIAsset(BaseModel):
     dependencies: list[str] = []
     raw_findings: list[Finding] = []
     code_contexts: list[CodeContext] = []
+    task_types: list[TaskType] = []  # Sprint 2 — training vs inference etc.
+    tags: list[str] = []  # Sprint 2 — chatbot/rag/agent/training/…
 
 
 class ScannerConfig(BaseModel):

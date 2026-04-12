@@ -2,9 +2,11 @@
 
 from __future__ import annotations
 
+import ipaddress
 import os
 import sys
 from pathlib import Path
+from urllib.parse import urlsplit
 
 import click
 import yaml
@@ -36,7 +38,7 @@ def cli():
 @click.option("--config", "-c", type=click.Path(exists=True), help="YAML config file")
 @click.option("--token", "-t", envvar="AISCOUT_GIT_TOKEN", help="Git access token")
 @click.option("--branch", "-b", default="main", help="Default branch to scan")
-@click.option("--output", "-o", default="aiscout_report.html", help="Output report path")
+@click.option("--output", "-o", default="aiscout_report.html", help="Output path (.html or .json)")
 @click.option("--llm-url", default="http://localhost:11434", help="LLM API URL")
 @click.option("--llm-model", default="qwen2.5-coder:7b", help="LLM model name")
 @click.option(
@@ -164,12 +166,102 @@ def scan(
         all_assets = [a for r in scan_results for a in r.assets]
     insights = enrich_assets(all_assets)
 
-    # Generate report
-    gen = ReportGenerator(scan_results, output_path=output, insights=insights)
+    # Generate report — auto-detect format from extension
+    if output.endswith(".json"):
+        from aiscout.report.json_export import JSONExporter
+        gen = JSONExporter(scan_results, output_path=output, insights=insights)
+    else:
+        gen = ReportGenerator(scan_results, output_path=output, insights=insights)
     report_path = gen.generate()
 
     # Print summary
     _print_summary(scan_results, report_path)
+
+
+_ALLOWED_URL_SCHEMES = {"https", "http", "ssh", "git"}
+_FORBIDDEN_SYSTEM_PATHS = {
+    "/", "/etc", "/var", "/usr", "/bin", "/sbin", "/boot", "/dev", "/proc",
+    "/sys", "/root", "/System", "/Library", "/private", "/opt",
+    # macOS resolves /etc and /var into /private/* via firmlinks
+    "/private/etc", "/private/var",
+}
+
+
+class InputValidationError(click.UsageError):
+    """Raised when a CLI-provided repo URL or local path fails validation."""
+
+
+def _validate_repo_url(url: str) -> str:
+    """Reject URLs that could be used for SSRF or local file disclosure.
+
+    Only ``https``/``http``/``ssh``/``git`` schemes are allowed. ``file://``,
+    ``gopher://``, and other git-accepted protocols that can read local files
+    or hit arbitrary network services are rejected. Hosts resolving to the
+    loopback, link-local, or cloud metadata address (``169.254.169.254``)
+    are rejected as well.
+    """
+    if not url or not isinstance(url, str):
+        raise InputValidationError("Repository URL must be a non-empty string.")
+
+    url = url.strip()
+
+    # scp-like syntax: git@github.com:org/repo.git — not a real URL, special-case
+    if "@" in url and "://" not in url:
+        host = url.split("@", 1)[1].split(":", 1)[0]
+        if not host or _is_blocked_host(host):
+            raise InputValidationError(
+                f"Refusing to clone from restricted host: {host or '<empty>'}"
+            )
+        return url
+
+    parts = urlsplit(url)
+    if parts.scheme.lower() not in _ALLOWED_URL_SCHEMES:
+        raise InputValidationError(
+            f"Unsupported repository URL scheme '{parts.scheme}'. "
+            f"Allowed: {sorted(_ALLOWED_URL_SCHEMES)}."
+        )
+    if not parts.hostname:
+        raise InputValidationError(f"Repository URL is missing a hostname: {url}")
+    if _is_blocked_host(parts.hostname):
+        raise InputValidationError(
+            f"Refusing to clone from restricted host: {parts.hostname}"
+        )
+    return url
+
+
+def _is_blocked_host(host: str) -> bool:
+    host = host.strip().lower().rstrip(".")
+    if host in ("localhost", "ip6-localhost", "ip6-loopback"):
+        return True
+    try:
+        ip = ipaddress.ip_address(host)
+    except ValueError:
+        return False
+    if ip.is_loopback or ip.is_link_local or ip.is_multicast or ip.is_unspecified:
+        return True
+    # Cloud metadata endpoints
+    if str(ip) in {"169.254.169.254", "fd00:ec2::254"}:
+        return True
+    return False
+
+
+def _validate_local_path(raw: str) -> Path:
+    """Reject local paths that point at the filesystem root or system dirs."""
+    if not raw:
+        raise InputValidationError("Local repository path must not be empty.")
+    path = Path(raw).expanduser().resolve()
+    if not path.exists():
+        raise InputValidationError(f"Local path does not exist: {path}")
+    if not path.is_dir():
+        raise InputValidationError(f"Local path is not a directory: {path}")
+    if str(path) in _FORBIDDEN_SYSTEM_PATHS:
+        raise InputValidationError(
+            f"Refusing to scan system directory: {path}"
+        )
+    # Require at least one path component below the drive/root
+    if len(path.parts) < 2:
+        raise InputValidationError(f"Refusing to scan filesystem root: {path}")
+    return path
 
 
 def _build_repo_list(
@@ -184,14 +276,15 @@ def _build_repo_list(
 
     # From CLI --repo flags
     for url in repo_urls:
-        repos.append({"url": url, "token": default_token, "branch": default_branch,
-                       "name": url.rstrip("/").split("/")[-1].removesuffix(".git")})
+        validated = _validate_repo_url(url)
+        repos.append({"url": validated, "token": default_token, "branch": default_branch,
+                       "name": validated.rstrip("/").split("/")[-1].removesuffix(".git")})
 
     # From CLI --local flags
     for path in local_paths:
-        abs_path = str(Path(path).resolve())
-        repos.append({"path": abs_path, "branch": default_branch,
-                       "name": Path(path).name})
+        abs_path = _validate_local_path(path)
+        repos.append({"path": str(abs_path), "branch": default_branch,
+                       "name": abs_path.name})
 
     # From YAML config
     if config_path:
@@ -202,11 +295,12 @@ def _build_repo_list(
             for entry in cfg.get("repositories", []):
                 item: dict = {}
                 if "url" in entry:
-                    item["url"] = entry["url"]
-                    item["name"] = entry["url"].rstrip("/").split("/")[-1].removesuffix(".git")
+                    item["url"] = _validate_repo_url(entry["url"])
+                    item["name"] = item["url"].rstrip("/").split("/")[-1].removesuffix(".git")
                 elif "path" in entry:
-                    item["path"] = str(Path(entry["path"]).resolve())
-                    item["name"] = Path(entry["path"]).name
+                    validated_path = _validate_local_path(entry["path"])
+                    item["path"] = str(validated_path)
+                    item["name"] = validated_path.name
                 else:
                     continue
 
@@ -220,6 +314,8 @@ def _build_repo_list(
                     item["token"] = default_token
 
                 repos.append(item)
+        except InputValidationError:
+            raise
         except Exception as e:
             console.print(f"[red]Error loading config:[/] {e}")
 

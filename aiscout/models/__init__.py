@@ -14,6 +14,7 @@ from .assets import (
     ProviderInfo,
     ScannerConfig,
     ScanResult,
+    TaskType,
 )
 
 __all__ = [
@@ -30,4 +31,5 @@ __all__ = [
     "ProviderInfo",
     "ScannerConfig",
     "ScanResult",
+    "TaskType",
 ]

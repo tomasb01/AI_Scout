@@ -4,8 +4,10 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 
+import re
+
 from aiscout.knowledge.providers import ProviderProfile, get_provider
-from aiscout.models import AIAsset, Finding, FindingType
+from aiscout.models import AIAsset, Finding, FindingType, TaskType
 
 
 @dataclass
@@ -34,6 +36,11 @@ class AssetInsight:
 def enrich_asset(asset: AIAsset) -> AssetInsight:
     """Generate summary, risk reasoning, and recommendations for an asset."""
     provider = get_provider(asset.provider.name) if asset.provider else None
+
+    # Sprint 2 — attach task_types + tags BEFORE the rest so downstream
+    # builders (summary, risk reasons, recommendations) can reference them.
+    asset.task_types = _detect_task_types(asset)
+    asset.tags = _derive_tags(asset)
 
     summary = _build_summary(asset, provider)
     risk_reasons = _build_risk_reasons(asset, provider)
@@ -77,6 +84,138 @@ def enrich_asset(asset: AIAsset) -> AssetInsight:
 def enrich_assets(assets: list[AIAsset]) -> dict[str, AssetInsight]:
     """Enrich all assets. Returns a dict mapping asset.id -> AssetInsight."""
     return {asset.id: enrich_asset(asset) for asset in assets}
+
+
+# ── Sprint 2: task_type + tag derivation ─────────────────────────────────
+
+_TRAINING_KEYWORDS = (
+    "trainer(", "trainingarguments", "sfttrainer", "dpotrainer", "pportrainer",
+    "model.fit(", "model.train()", ".backward()", "optimizer.step(",
+    "torch.optim", "adamw", "lr_scheduler", "loraconfig", "get_peft_model",
+    "accelerate.accelerator", "deepspeed", "fsdp", "huggingface_hub.upload",
+)
+_FINE_TUNE_KEYWORDS = (
+    "fine_tune", "fine-tune", "finetune", "lora", "qlora", "peft",
+    "client.fine_tuning", "fine_tuning.jobs", "sfttrainer",
+)
+_EVAL_KEYWORDS = (
+    "model.eval()", "evaluate.load", "sklearn.metrics", "compute_metrics",
+    "classification_report", "confusion_matrix", "rouge_score", "bleu_score",
+    "lm_eval", "trainer.evaluate",
+)
+
+_TAG_RULES = (
+    # (tag, list-of-lowercase-substrings that trigger it)
+    ("chatbot", (
+        "system_prompt", "system prompt", "assistant",
+        "messages.create", "chat.completions", "chatmessage",
+        "conversation", "chat history", "user_message",
+    )),
+    ("rag", (
+        "chromadb", "pinecone", "qdrant", "weaviate", "faiss", "milvus",
+        "vector_store", "vectorstore", "embedding", "retrieval",
+        "similarity_search", "as_retriever", "langchain.retrievers",
+    )),
+    ("agent", (
+        "crewai", "autogen", "langgraph", "agentexecutor", "tool_call",
+        "tools=[", "function_call", "run_agent", "langchain.agents",
+    )),
+    ("training", _TRAINING_KEYWORDS),
+    ("fine_tuning", _FINE_TUNE_KEYWORDS),
+    ("evaluation", _EVAL_KEYWORDS),
+    ("transcription", (
+        "whisper", "transcribe", "audio_file", "speech_to_text",
+    )),
+    ("image_generation", (
+        "dall-e", "dalle", "stablediffusion", "stable_diffusion",
+        "images.generate", "text2image",
+    )),
+    ("local_model", (
+        "ollama", "llama.cpp", "llama_cpp", "vllm", "localai",
+    )),
+    ("mcp", (
+        "mcp.server", "modelcontextprotocol", "mcpserver",
+    )),
+)
+
+
+def _collect_code_text(asset: AIAsset) -> str:
+    """Concatenate all searchable code-derived text for keyword matching."""
+    parts: list[str] = [asset.name, asset.file_path]
+    for ctx in asset.code_contexts:
+        parts.append(ctx.file_path)
+        for func in ctx.functions:
+            parts.append(func.get("name", ""))
+            parts.append(func.get("body_preview", ""))
+            parts.append(func.get("docstring", ""))
+            parts.extend(func.get("decorators", []))
+        for cls in ctx.classes:
+            parts.append(cls.get("name", ""))
+        for call in ctx.api_calls:
+            parts.append(call.get("target", ""))
+            parts.append(call.get("args_preview", ""))
+        parts.extend(ctx.prompts)
+        parts.extend(ctx.model_names)
+        parts.extend(ctx.env_vars)
+        parts.extend(ctx.raw_snippets)
+    for f in asset.raw_findings:
+        parts.append(f.content)
+        parts.append(f.file_path)
+    return " ".join(p for p in parts if p).lower()
+
+
+def _detect_task_types(asset: AIAsset) -> list[TaskType]:
+    """Infer what the asset *does* with the model.
+
+    Training and fine-tuning are the highest-risk task types because they
+    typically ingest large volumes of real customer data. Evaluation is
+    lower risk but still worth surfacing because it indicates an active
+    ML lifecycle rather than a shipped feature.
+
+    Any asset with zero positive signals defaults to ``INFERENCE`` — the
+    overwhelmingly common case — rather than ``UNKNOWN``, which would hide
+    it from reports that filter by task type.
+    """
+    text = _collect_code_text(asset)
+    types: list[TaskType] = []
+    if any(k in text for k in _FINE_TUNE_KEYWORDS):
+        types.append(TaskType.FINE_TUNING)
+    if any(k in text for k in _TRAINING_KEYWORDS) and TaskType.FINE_TUNING not in types:
+        types.append(TaskType.TRAINING)
+    if any(k in text for k in _EVAL_KEYWORDS):
+        types.append(TaskType.EVALUATION)
+    # Heuristic: a file path that literally says "train" or "finetune" is a
+    # strong signal even if keyword detection missed it.
+    path_lower = asset.file_path.lower()
+    if ("train" in path_lower or "fine_tun" in path_lower or "finetune" in path_lower):
+        if TaskType.TRAINING not in types and TaskType.FINE_TUNING not in types:
+            types.append(TaskType.TRAINING)
+    if not types:
+        types.append(TaskType.INFERENCE)
+    return sorted(set(types), key=lambda t: t.value)
+
+
+def _derive_tags(asset: AIAsset) -> list[str]:
+    """Derive human-facing tags for the asset card.
+
+    Tags describe the *kind* of AI workload (chatbot, RAG, agent,
+    training, …) — orthogonal to the provider. They feed the report
+    filter chips and Sprint-2 sub-component view.
+    """
+    text = _collect_code_text(asset)
+    tags: set[str] = set()
+    for tag, keywords in _TAG_RULES:
+        if any(k in text for k in keywords):
+            tags.add(tag)
+    # Promote tags from findings themselves (containers + providers)
+    for f in asset.raw_findings:
+        if f.type == FindingType.CONTAINER_DETECTED:
+            tags.add("local_model")
+        if f.type == FindingType.LOCAL_MODEL_DETECTED:
+            tags.add("local_model")
+        if f.provider == "mcp":
+            tags.add("mcp")
+    return sorted(tags)
 
 
 # ── Summary builder ───────────────────────────────────────────────────────
@@ -255,9 +394,9 @@ def _infer_from_code_contexts(asset: AIAsset) -> str:
     if source_types or sink_types:
         flow_parts = []
         if source_types:
-            flow_parts.append(f"Reads from: {', '.join(list(source_types)[:3])}")
+            flow_parts.append(f"Reads from: {', '.join(sorted(source_types)[:3])}")
         if sink_types:
-            flow_parts.append(f"Outputs to: {', '.join(list(sink_types)[:3])}")
+            flow_parts.append(f"Outputs to: {', '.join(sorted(sink_types)[:3])}")
         if flow_parts:
             parts.append(". ".join(flow_parts) + ".")
 
@@ -278,9 +417,9 @@ def _infer_from_code_contexts(asset: AIAsset) -> str:
 
     # ── AI API calls ──
     if all_api_calls and not any("API" in p for p in parts):
-        targets = set(call.get("target", "")[:50] for call in all_api_calls[:3])
+        targets = {call.get("target", "")[:50] for call in all_api_calls[:3]}
         if targets:
-            parts.append(f"AI calls: {', '.join(targets)}.")
+            parts.append(f"AI calls: {', '.join(sorted(targets))}.")
 
     # ── Environment variables hint at integrations ──
     interesting_vars = [v for v in all_env_vars if any(
@@ -475,6 +614,82 @@ def _build_risk_reasons(
                 f"Embeddings sent to {provider.display_name} may encode sensitive information "
                 "from your data. While not directly readable, embeddings can potentially be "
                 "reversed or used for inference attacks."
+            ),
+        ))
+
+    # ── Sprint 2: workload-kind risks ──
+
+    if TaskType.FINE_TUNING in asset.task_types or TaskType.TRAINING in asset.task_types:
+        kind = (
+            "Fine-tuning" if TaskType.FINE_TUNING in asset.task_types else "Training"
+        )
+        reasons.append(RiskReason(
+            severity="warning",
+            title=f"{kind} pipeline ingests training data",
+            detail=(
+                f"This asset appears to {kind.lower()} a model. Training pipelines "
+                "typically consume real production data (logs, customer messages, "
+                "documents), so they carry higher privacy, IP-leakage and "
+                "compute-cost risk than plain inference. Verify data provenance, "
+                "access controls on the training set, and that resulting model "
+                "weights are stored in a governed artifact repository."
+            ),
+        ))
+
+    mcp_findings = [
+        f for f in asset.raw_findings
+        if f.provider == "mcp"
+    ]
+    if mcp_findings:
+        server_names = sorted({
+            f.content.replace("mcp server: ", "")
+            for f in mcp_findings
+            if f.content.startswith("mcp server:")
+        })
+        detail = (
+            "Model Context Protocol server(s) give an LLM application privileged "
+            "access to local tools, filesystems or remote APIs. Each configured "
+            "server is a potential data-exfiltration vector and should be audited "
+            "individually."
+        )
+        if server_names:
+            detail += f" Configured servers: {', '.join(server_names)}."
+        reasons.append(RiskReason(
+            severity="warning",
+            title="MCP servers expose tool access to the model",
+            detail=detail,
+        ))
+
+    container_findings = [
+        f for f in asset.raw_findings
+        if f.type == FindingType.CONTAINER_DETECTED
+    ]
+    if container_findings:
+        images = sorted({f.content for f in container_findings})
+        reasons.append(RiskReason(
+            severity="info",
+            title="Self-hosted AI runtime detected in container manifest",
+            detail=(
+                "Docker/Compose files declare an AI runtime or vector store: "
+                f"{', '.join(images)}. Self-hosting keeps data on-prem but "
+                "requires you to patch the runtime, monitor resource use, and "
+                "secure the management endpoints."
+            ),
+        ))
+
+    local_model_findings = [
+        f for f in asset.raw_findings
+        if f.type == FindingType.LOCAL_MODEL_DETECTED
+    ]
+    if local_model_findings:
+        reasons.append(RiskReason(
+            severity="info",
+            title="Local model weights committed to repository",
+            detail=(
+                f"Found {len(local_model_findings)} model weight file(s) "
+                "(.gguf/.safetensors/.onnx/…) tracked in source control. Large "
+                "binaries bloat the repo and are often better served via a model "
+                "registry or Git LFS; verify licensing of the underlying model."
             ),
         ))
 

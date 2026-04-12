@@ -3,9 +3,15 @@
 import tempfile
 from pathlib import Path
 
+import pytest
 from click.testing import CliRunner
 
-from aiscout.cli import cli
+from aiscout.cli import (
+    InputValidationError,
+    _validate_local_path,
+    _validate_repo_url,
+    cli,
+)
 
 
 FIXTURES = Path(__file__).parent / "fixtures"
@@ -71,3 +77,42 @@ output:
     assert Path(output).exists()
     Path(output).unlink()
     Path(config_path).unlink()
+
+
+# ── Sprint 1: H4 input validation ────────────────────────────────────────
+
+
+@pytest.mark.parametrize("bad_url", [
+    "file:///etc/passwd",
+    "http://127.0.0.1/repo.git",
+    "http://localhost:8080/repo.git",
+    "http://169.254.169.254/latest/meta-data/",
+    "gopher://example.com/",
+    "ssh://localhost/repo.git",
+])
+def test_validate_repo_url_rejects_unsafe(bad_url):
+    with pytest.raises(InputValidationError):
+        _validate_repo_url(bad_url)
+
+
+@pytest.mark.parametrize("good_url", [
+    "https://github.com/org/repo.git",
+    "https://gitlab.com/group/project",
+    "git@github.com:org/repo.git",
+    "ssh://git@github.com/org/repo.git",
+])
+def test_validate_repo_url_accepts_safe(good_url):
+    assert _validate_repo_url(good_url) == good_url
+
+
+@pytest.mark.parametrize("bad_path", ["/", "/etc", "/System", "/Library"])
+def test_validate_local_path_rejects_system_dirs(bad_path):
+    if not Path(bad_path).exists():
+        pytest.skip(f"{bad_path} not present on this host")
+    with pytest.raises(InputValidationError):
+        _validate_local_path(bad_path)
+
+
+def test_validate_local_path_accepts_fixture_dir():
+    result = _validate_local_path(str(FIXTURES))
+    assert result.is_dir()

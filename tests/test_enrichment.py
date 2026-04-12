@@ -114,3 +114,74 @@ def test_risk_score_recalculated():
     enrich_asset(asset)
     # Should be recalculated based on reasons (critical + warnings)
     assert asset.risk_score > 0.4
+
+
+# ── Sprint 2: task_type + tag derivation ─────────────────────────────────
+
+
+def test_task_type_defaults_to_inference():
+    from aiscout.models import TaskType
+    asset = _make_asset("openai")
+    asset.code_contexts = []
+    enrich_asset(asset)
+    assert TaskType.INFERENCE in asset.task_types
+
+
+def test_task_type_detects_fine_tuning_from_code():
+    from aiscout.models import CodeContext, TaskType
+    asset = _make_asset("huggingface")
+    asset.code_contexts = [CodeContext(
+        file_path="finetune.py",
+        language="python",
+        functions=[{
+            "name": "main",
+            "body_preview": "trainer = Trainer(model=m); trainer.train(); peft.save_pretrained()",
+        }],
+    )]
+    asset.file_path = "scripts/finetune.py"
+    enrich_asset(asset)
+    assert TaskType.FINE_TUNING in asset.task_types
+    titles = {r.title for r in enrich_asset(asset).risk_reasons}
+    assert any("Fine-tuning" in t or "Training" in t for t in titles)
+
+
+def test_tags_include_rag_when_vector_db_used():
+    from aiscout.models import CodeContext
+    asset = _make_asset("pinecone")
+    asset.code_contexts = [CodeContext(
+        file_path="rag.py",
+        language="python",
+        functions=[{"name": "search", "body_preview": "pinecone.query(embedding=vec)"}],
+    )]
+    enrich_asset(asset)
+    assert "rag" in asset.tags
+
+
+def test_tags_include_chatbot_for_conversational_code():
+    from aiscout.models import CodeContext
+    asset = _make_asset("openai")
+    asset.code_contexts = [CodeContext(
+        file_path="bot.py",
+        language="python",
+        functions=[{
+            "name": "chat",
+            "body_preview": "client.chat.completions.create(messages=[{'role':'user',...}])",
+        }],
+        prompts=["You are a helpful assistant"],
+    )]
+    enrich_asset(asset)
+    assert "chatbot" in asset.tags
+
+
+def test_mcp_finding_raises_risk_reason():
+    asset = _make_asset("mcp", findings=[
+        Finding(
+            type=FindingType.CONFIG_DETECTED,
+            file_path="mcp.json",
+            content="mcp server: filesystem",
+            provider="mcp",
+        ),
+    ])
+    insight = enrich_asset(asset)
+    assert any("MCP" in r.title for r in insight.risk_reasons)
+    assert "mcp" in asset.tags
