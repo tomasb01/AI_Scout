@@ -241,6 +241,75 @@ def test_model_file_over_1mb_still_detected(tmp_path):
     assert "big.safetensors" in names
 
 
+# ── Sprint 3: CI/CD, YAML config, advisories ─────────────────────────────
+
+
+def test_detect_ci_pipeline_github_action():
+    scanner = GitScanner(repo_path="/tmp")
+    workflow = (
+        "name: Review\n"
+        "on: [pull_request]\n"
+        "jobs:\n"
+        "  review:\n"
+        "    runs-on: ubuntu-latest\n"
+        "    steps:\n"
+        "      - uses: anthropics/claude-code-action@v1\n"
+        "        env:\n"
+        "          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}\n"
+    )
+    findings = scanner._detect_ci_pipeline(".github/workflows/review.yml", workflow)
+    providers = {f.provider for f in findings}
+    assert providers == {"anthropic"}
+    assert any("credential" in f.content.lower() for f in findings)
+    assert any("action" in f.content.lower() for f in findings)
+
+
+def test_detect_ci_pipeline_training_script():
+    scanner = GitScanner(repo_path="/tmp")
+    workflow = (
+        "jobs:\n"
+        "  train:\n"
+        "    runs-on: gpu\n"
+        "    steps:\n"
+        "      - run: python scripts/finetune_mistral.py --epochs 3\n"
+    )
+    findings = scanner._detect_ci_pipeline(".github/workflows/train.yml", workflow)
+    assert any("training script" in f.content.lower() for f in findings)
+
+
+def test_yaml_config_captures_azure_deployment():
+    scanner = GitScanner(repo_path="/tmp")
+    yaml_text = (
+        "llm:\n"
+        "  deployment_name: gpt-4o-prod-eu\n"
+        "  model: gpt-4o\n"
+        "  azure_endpoint: https://co.openai.azure.com\n"
+    )
+    findings = scanner._detect_config_model_refs("config.yaml", yaml_text)
+    providers = {f.provider for f in findings}
+    assert "azure_openai" in providers
+    assert any("gpt-4o-prod-eu" in f.content for f in findings)
+
+
+def test_yaml_config_rejects_non_model_string():
+    from aiscout.scanners.git_scanner import _is_plausible_model_ref
+    assert _is_plausible_model_ref("gpt-4o")
+    assert _is_plausible_model_ref("claude-3-5-sonnet")
+    assert _is_plausible_model_ref("gpt-4o-prod-eu")
+    assert not _is_plausible_model_ref("true")
+    assert not _is_plausible_model_ref("default")
+    assert not _is_plausible_model_ref("x")
+
+
+def test_ci_file_detection():
+    from aiscout.scanners.git_scanner import _looks_like_ci_file
+    assert _looks_like_ci_file(".github/workflows/main.yml", "main.yml")
+    assert _looks_like_ci_file(".gitlab-ci.yml", ".gitlab-ci.yml")
+    assert _looks_like_ci_file("Jenkinsfile", "Jenkinsfile")
+    assert _looks_like_ci_file(".circleci/config.yml", "config.yml")
+    assert not _looks_like_ci_file("docs/examples.yml", "examples.yml")
+
+
 def test_walk_files_skips_escape_via_symlinked_dir(tmp_path):
     """Sprint 1 / H3: a symlinked *directory* must not cause escape."""
     outside_dir = tmp_path.parent / "outside_escape_dir"

@@ -37,9 +37,11 @@ from aiscout.scanners.git_scanner import GitScanner
 
 FIXTURES = Path(__file__).parent / "fixtures"
 SPRINT2_FIXTURES = FIXTURES / "sprint2"
+SPRINT3_FIXTURES = FIXTURES / "sprint3"
 GOLDEN_DIR = Path(__file__).parent / "regression"
 GOLDEN = GOLDEN_DIR / "golden.json"
 GOLDEN_SPRINT2 = GOLDEN_DIR / "golden_sprint2.json"
+GOLDEN_SPRINT3 = GOLDEN_DIR / "golden_sprint3.json"
 
 
 def _run_pipeline(root: Path = FIXTURES) -> dict:
@@ -190,6 +192,16 @@ def test_regression_snapshot_sprint2():
     detector in a single pipeline run."""
     _diff_against_golden(
         _run_pipeline(SPRINT2_FIXTURES), GOLDEN_SPRINT2, "fixtures/sprint2"
+    )
+
+
+def test_regression_snapshot_sprint3():
+    """Sprint 3 fixture tree — CI workflow, YAML config with Azure
+    deployment, requirements.txt pinned to legacy openai/langchain. One
+    snapshot covers CI detection, YAML model parsing and dependency
+    advisories."""
+    _diff_against_golden(
+        _run_pipeline(SPRINT3_FIXTURES), GOLDEN_SPRINT3, "fixtures/sprint3"
     )
 
 

@@ -131,7 +131,7 @@
         }
       ],
       "repository": "sprint2",
-      "risk_score": 0.7,
+      "risk_score": 0.48,
       "tags": [
         "chatbot",
         "fine_tuning",
@@ -177,13 +177,14 @@
         "vendor": "Microsoft Azure"
       },
       "recommendations": [
-        "Review what data is being sent to the API. Ensure no PII, confidential, or regulated data is transmitted without appropriate controls."
+        "Document this AI integration in your organization's AI asset inventory.",
+        "Review the integration against your AI governance policy."
       ],
       "risk_reasons": [
         {
-          "detail": "This integration sends data to Azure OpenAI (Microsoft Azure) for processing. Data is transmitted outside your infrastructure. Vendor: Microsoft Azure.",
-          "severity": "warning",
-          "title": "Data sent to external AI API"
+          "detail": "Data is processed by Azure OpenAI (Microsoft Azure). Residency: customer-selected Azure region (EU, US, UK, …). Training policy: Data is NOT sent to OpenAI and is NOT used to train models. Stays within the customer's Azure tenant.",
+          "severity": "info",
+          "title": "External AI API: Azure OpenAI"
         },
         {
           "detail": "This asset appears to fine-tuning a model. Training pipelines typically consume real production data (logs, customer messages, documents), so they carry higher privacy, IP-leakage and compute-cost risk than plain inference. Verify data provenance, access controls on the training set, and that resulting model weights are stored in a governed artifact repository.",
@@ -191,9 +192,9 @@
           "title": "Fine-tuning pipeline ingests training data"
         },
         {
-          "detail": "Model Context Protocol server(s) give an LLM application privileged access to local tools, filesystems or remote APIs. Each configured server is a potential data-exfiltration vector and should be audited individually. Configured servers: filesystem, github.",
-          "severity": "warning",
-          "title": "MCP servers expose tool access to the model"
+          "detail": "This asset uses Model Context Protocol to call one or more external MCP servers. The data sent to each server depends on the server's implementation — review each server before granting it access to production prompts. Configured servers: filesystem, github.",
+          "severity": "info",
+          "title": "MCP client — consumes external tool servers"
         },
         {
           "detail": "Docker/Compose files declare an AI runtime or vector store: Ollama runtime, Qdrant vector DB, vLLM inference server. Self-hosting keeps data on-prem but requires you to patch the runtime, monitor resource use, and secure the management endpoints.",
@@ -207,7 +208,7 @@
         }
       ],
       "solution_name": "An internal support assistant for the FleurCorp helpdesk",
-      "summary": "Role: \"an internal support assistant for the FleurCorp helpdesk\". Key functions: answer. AI calls: client.chat.completions.create.",
+      "summary": "Fine-tuning Llama 3 via LoRA/PEFT. Role: \"an internal support assistant for the FleurCorp helpdesk\". Key functions: answer. AI calls: client.chat.completions.create.",
       "tech_stack": [
         "Azure OpenAI",
         "Hugging Face",

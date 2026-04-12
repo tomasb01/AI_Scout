@@ -78,6 +78,55 @@ _CONTAINER_IMAGE_PATTERNS: list[tuple[re.Pattern, str, str]] = [
     (re.compile(r"open-webui/open-webui", re.IGNORECASE), "open-webui", "Open WebUI"),
 ]
 
+# Sprint 3 — YAML/TOML config model references. Looks for explicit
+# model/deployment names in configuration files that aren't code. The
+# value is captured so downstream enrichment can surface which model a
+# project has pinned in its config. Pattern order matters — more
+# specific keys first.
+_CONFIG_MODEL_PATTERNS: list[tuple[re.Pattern, str]] = [
+    # Azure OpenAI: deployment_name / deployment
+    (re.compile(r"""(?im)^\s*(?:deployment_?name|deployment)\s*[:=]\s*["']?([\w.\-]+)["']?"""), "azure_openai"),
+    (re.compile(r"""(?im)^\s*azure_?endpoint\s*[:=]\s*["']?(https?://[^\s"']+)"""), "azure_openai"),
+    # OpenAI / generic LLM: model name (any *_model key)
+    (re.compile(r"""(?im)^\s*(?:[a-z_]*model(?:_name)?|llm|chat_model)\s*[:=]\s*["']?([\w./:\-]+)["']?"""), "openai"),
+    # Ollama: pulled model
+    (re.compile(r"""(?im)^\s*ollama_?model\s*[:=]\s*["']?([\w./:\-]+)["']?"""), "ollama"),
+    # Bedrock: model_id
+    (re.compile(r"""(?im)^\s*model_id\s*[:=]\s*["']?([\w.\-:]+)["']?"""), "aws_bedrock"),
+]
+
+_CONFIG_SCAN_SUFFIXES = {".yaml", ".yml", ".toml"}
+_CONFIG_SKIP_NAMES = {
+    # Already handled by dedicated detectors — don't double-scan
+    "pyproject.toml", "package.json", "docker-compose.yml", "docker-compose.yaml",
+    "compose.yml", "compose.yaml", "mcp.json", ".mcp.json",
+    "claude_desktop_config.json",
+}
+
+
+# Sprint 3 — CI/CD pipelines that run AI code. Matches on:
+#   * uses:/image: lines referencing AI SDKs, LLM code reviewers, etc.
+#   * env vars that hand AI provider credentials to runners
+#   * `run:` shell steps invoking python scripts that are themselves
+#     AI fine-tuning / inference code (best-effort regex signal)
+_CI_AI_PATTERNS: list[tuple[re.Pattern, str, str]] = [
+    (re.compile(r"\bANTHROPIC_API_KEY\b"), "anthropic", "Anthropic credential in CI"),
+    (re.compile(r"\bOPENAI_API_KEY\b"), "openai", "OpenAI credential in CI"),
+    (re.compile(r"\bAZURE_OPENAI_API_KEY\b"), "azure_openai", "Azure OpenAI credential in CI"),
+    (re.compile(r"\bHUGGINGFACE(?:HUB)?_TOKEN\b|\bHF_TOKEN\b"), "huggingface", "HuggingFace token in CI"),
+    (re.compile(r"\bGOOGLE_API_KEY\b|\bGEMINI_API_KEY\b"), "google_ai", "Google AI credential in CI"),
+    (re.compile(r"\bCOHERE_API_KEY\b"), "cohere", "Cohere credential in CI"),
+    (re.compile(r"\bREPLICATE_API_TOKEN\b"), "replicate", "Replicate token in CI"),
+    (re.compile(r"\bMISTRAL_API_KEY\b"), "mistral", "Mistral credential in CI"),
+    (re.compile(r"\bAWS_BEDROCK|bedrock-runtime\b", re.IGNORECASE), "aws_bedrock", "AWS Bedrock access in CI"),
+    (re.compile(r"anthropics/claude-code-action|anthropic/.*-action"), "anthropic", "Claude GitHub Action"),
+    (re.compile(r"openai/.*-action|coderabbitai/"), "openai", "OpenAI-based GitHub Action"),
+    (re.compile(r"huggingface/.*-action|huggingface/transformers"), "huggingface", "HuggingFace Action/runner"),
+    (re.compile(r"python\s+.*?(?:train|finetune|fine_tune)\w*\.py"), "huggingface", "CI runs a training script"),
+    (re.compile(r"accelerate\s+launch|deepspeed\s|torchrun\s"), "huggingface", "CI launches distributed training"),
+    (re.compile(r"modal\s+run|runpod"), "huggingface", "CI submits jobs to GPU cloud"),
+]
+
 # Sprint 2 — detect training vs inference from code body keywords.
 _TRAINING_MARKERS = re.compile(
     r"\b("
@@ -326,10 +375,29 @@ class GitScanner(BaseScanner):
                     )
                     continue
 
+                # ── CI/CD pipelines ──
+                if _looks_like_ci_file(rel_path, file_path.name):
+                    all_findings.extend(
+                        self._detect_ci_pipeline(rel_path, content)
+                    )
+                    # Intentionally fall through — a workflow file may also
+                    # contain AI imports referenced via `uses:`/`script:`.
+
                 # Run code detectors
                 all_findings.extend(self._detect_imports(rel_path, content))
                 all_findings.extend(self._detect_api_keys(rel_path, content))
                 all_findings.extend(self._detect_azure_openai_config(rel_path, content))
+
+                # Sprint 3 — YAML/TOML model/deployment config references.
+                # We don't want to rescan pyproject.toml etc. which are
+                # handled by _scan_dependencies.
+                if (
+                    file_path.suffix in _CONFIG_SCAN_SUFFIXES
+                    and file_path.name not in _CONFIG_SKIP_NAMES
+                ):
+                    all_findings.extend(
+                        self._detect_config_model_refs(rel_path, content)
+                    )
 
                 # Dependency files get special treatment
                 if file_path.name in DEPENDENCY_FILES:
@@ -452,7 +520,8 @@ class GitScanner(BaseScanner):
                 is_code = path.suffix in SCAN_EXTENSIONS
                 is_special = name in SPECIAL_FILENAMES
                 is_model = path.suffix.lower() in LOCAL_MODEL_EXTENSIONS
-                if not (is_code or is_special or is_model):
+                is_dep = name in DEPENDENCY_FILES  # requirements.txt, setup.py
+                if not (is_code or is_special or is_model or is_dep):
                     continue
 
                 try:
@@ -660,6 +729,67 @@ class GitScanner(BaseScanner):
             ))
         return findings
 
+    def _detect_config_model_refs(
+        self, file_path: str, content: str
+    ) -> list[Finding]:
+        """Extract model / deployment references from plain YAML/TOML.
+
+        Only strings that look like actual model IDs (contain a dash,
+        slash or digit and aren't purely boolean/number values) are
+        accepted. Deduped per file so a config that lists the same model
+        in ``default_model`` and ``fallback_model`` emits one finding.
+        """
+        findings: list[Finding] = []
+        seen: set[tuple[str, str]] = set()
+        for pattern, provider in _CONFIG_MODEL_PATTERNS:
+            for match in pattern.finditer(content):
+                value = match.group(1).strip().strip("\"'")
+                if not _is_plausible_model_ref(value):
+                    continue
+                key = (provider, value.lower())
+                if key in seen:
+                    continue
+                seen.add(key)
+                line_num = content[:match.start()].count("\n") + 1
+                findings.append(Finding(
+                    type=FindingType.CONFIG_DETECTED,
+                    file_path=file_path,
+                    line_number=line_num,
+                    content=f"config: {value}",
+                    provider=provider,
+                ))
+        return findings
+
+    def _detect_ci_pipeline(
+        self, file_path: str, content: str
+    ) -> list[Finding]:
+        """Detect AI workloads in CI/CD pipelines.
+
+        Emits one CONFIG_DETECTED finding per distinct AI signal in the
+        pipeline (credential, action/image reference, training command).
+        De-duplicated by provider so a workflow that exports
+        ``OPENAI_API_KEY`` twice produces a single finding.
+        """
+        findings: list[Finding] = []
+        seen: set[tuple[str, str]] = set()
+        for pattern, provider, label in _CI_AI_PATTERNS:
+            match = pattern.search(content)
+            if not match:
+                continue
+            key = (provider, label)
+            if key in seen:
+                continue
+            seen.add(key)
+            line_num = content[:match.start()].count("\n") + 1
+            findings.append(Finding(
+                type=FindingType.CONFIG_DETECTED,
+                file_path=file_path,
+                line_number=line_num,
+                content=f"CI: {label}",
+                provider=provider,
+            ))
+        return findings
+
     def _detect_azure_openai_config(
         self, file_path: str, content: str
     ) -> list[Finding]:
@@ -718,13 +848,14 @@ class GitScanner(BaseScanner):
             # Strip version specifiers: package>=1.0 -> package
             pkg = re.split(r"[>=<!\[;@\s]", line)[0].strip().lower()
             if pkg in AI_PYTHON_PACKAGES:
-                findings.append(Finding(
-                    type=FindingType.DEPENDENCY_DETECTED,
-                    file_path=file_path,
-                    line_number=i,
-                    content=line,
-                    provider=_package_to_provider(pkg),
-                ))
+                for provider in _package_to_providers(pkg):
+                    findings.append(Finding(
+                        type=FindingType.DEPENDENCY_DETECTED,
+                        file_path=file_path,
+                        line_number=i,
+                        content=line,
+                        provider=provider,
+                    ))
         return findings
 
     def _scan_pyproject_toml(self, file_path: str, content: str) -> list[Finding]:
@@ -748,12 +879,13 @@ class GitScanner(BaseScanner):
         for dep in deps:
             pkg = re.split(r"[>=<!\[;@\s]", dep)[0].strip().lower()
             if pkg in AI_PYTHON_PACKAGES:
-                findings.append(Finding(
-                    type=FindingType.DEPENDENCY_DETECTED,
-                    file_path=file_path,
-                    content=dep.strip(),
-                    provider=_package_to_provider(pkg),
-                ))
+                for provider in _package_to_providers(pkg):
+                    findings.append(Finding(
+                        type=FindingType.DEPENDENCY_DETECTED,
+                        file_path=file_path,
+                        content=dep.strip(),
+                        provider=provider,
+                    ))
         return findings
 
     def _scan_setup_py(self, file_path: str, content: str) -> list[Finding]:
@@ -764,12 +896,13 @@ class GitScanner(BaseScanner):
         for item in re.findall(r"['\"]([^'\"]+)['\"]", match.group(1)):
             pkg = re.split(r"[>=<!\[;@\s]", item)[0].strip().lower()
             if pkg in AI_PYTHON_PACKAGES:
-                findings.append(Finding(
-                    type=FindingType.DEPENDENCY_DETECTED,
-                    file_path=file_path,
-                    content=item,
-                    provider=_package_to_provider(pkg),
-                ))
+                for provider in _package_to_providers(pkg):
+                    findings.append(Finding(
+                        type=FindingType.DEPENDENCY_DETECTED,
+                        file_path=file_path,
+                        content=item,
+                        provider=provider,
+                    ))
         return findings
 
     def _scan_package_json(self, file_path: str, content: str) -> list[Finding]:
@@ -783,12 +916,13 @@ class GitScanner(BaseScanner):
             for pkg in data.get(section, {}):
                 if pkg in AI_NPM_PACKAGES:
                     version = data[section][pkg]
-                    findings.append(Finding(
-                        type=FindingType.DEPENDENCY_DETECTED,
-                        file_path=file_path,
-                        content=f"{pkg}@{version}",
-                        provider=_package_to_provider(pkg),
-                    ))
+                    for provider in _package_to_providers(pkg):
+                        findings.append(Finding(
+                            type=FindingType.DEPENDENCY_DETECTED,
+                            file_path=file_path,
+                            content=f"{pkg}@{version}",
+                            provider=provider,
+                        ))
         return findings
 
     def _group_findings_into_assets(
@@ -939,6 +1073,50 @@ def _pick_primary_provider(providers: list[str]) -> str:
     return sorted(pool)[0]
 
 
+_KNOWN_MODEL_KEYWORDS = (
+    "gpt", "claude", "gemini", "mistral", "llama", "qwen", "phi",
+    "command", "cohere", "bedrock", "deepseek", "mixtral", "falcon",
+    "whisper", "stable-diffusion", "dall-e", "gemma", "nova",
+)
+
+
+def _is_plausible_model_ref(value: str) -> bool:
+    """Filter out obviously non-model strings extracted from YAML/TOML.
+
+    YAML scanning is loose so a ``model: "primary"`` line would pass the
+    regex. We keep only values that either contain a known model family
+    substring, or match the shape of a deployment id (alphanumeric with
+    at least one hyphen/dot/digit and length 4-80).
+    """
+    if not value or len(value) < 2 or len(value) > 80:
+        return False
+    low = value.lower()
+    if low in {"true", "false", "null", "none", "default", "primary", "fallback"}:
+        return False
+    if any(kw in low for kw in _KNOWN_MODEL_KEYWORDS):
+        return True
+    # Looks like a deployment id: alphanum with hyphens AND at least one digit
+    if re.fullmatch(r"[A-Za-z][\w.\-]{3,}", value) and any(c.isdigit() for c in value):
+        return True
+    return False
+
+
+def _looks_like_ci_file(rel_path: str, filename: str) -> bool:
+    """Heuristic — is this file a CI/CD pipeline manifest?"""
+    rel_lower = rel_path.replace("\\", "/").lower()
+    if ".github/workflows/" in rel_lower and filename.endswith((".yml", ".yaml")):
+        return True
+    if filename in (
+        ".gitlab-ci.yml", ".gitlab-ci.yaml",
+        "bitbucket-pipelines.yml", "azure-pipelines.yml", "cloudbuild.yaml",
+        "Jenkinsfile",
+    ):
+        return True
+    if rel_lower.startswith(".circleci/") and filename.endswith((".yml", ".yaml")):
+        return True
+    return False
+
+
 def _human_size(num_bytes: int) -> str:
     """Format a byte count as a short human-readable string."""
     step = 1024.0
@@ -972,6 +1150,31 @@ def _redact_key(key: str) -> str:
     return key[:8] + "..." + key[-4:]
 
 
+def _package_to_providers(pkg: str) -> list[str]:
+    """Map a package name to one or more provider names.
+
+    LangChain / llama-index integration packages declare both the wrapper
+    framework **and** the real backend (e.g. ``langchain-openai`` → both
+    ``openai`` and ``langchain``). Returning both keeps the framework in
+    the tech stack while letting ``_pick_primary_provider`` attribute the
+    asset to the real data destination.
+    """
+    backend = _package_to_provider(pkg)
+    lc_framework_pkgs = {
+        "langchain-openai", "langchain-anthropic",
+        "langchain-google-genai", "langchain-google-vertexai",
+        "langchain-mistralai", "langchain-cohere", "langchain-aws",
+        "langchain-huggingface", "langchain-ollama",
+        "langchain-chroma", "langchain-pinecone",
+        "langchain-qdrant", "langchain-weaviate",
+        "@langchain/openai", "@langchain/anthropic",
+        "@langchain/google-genai",
+    }
+    if pkg in lc_framework_pkgs:
+        return [backend, "langchain"]
+    return [backend]
+
+
 def _package_to_provider(pkg: str) -> str:
     """Map a package name to a provider name."""
     mapping = {
@@ -980,9 +1183,30 @@ def _package_to_provider(pkg: str) -> str:
         "@azure/openai": "azure_openai",
         "openai": "openai",
         "anthropic": "anthropic",
+        # LangChain sub-packages declare the actual backend provider. We
+        # attribute them to the backend so reports show the real data
+        # destination — "LangChain" on its own is uninformative for
+        # residency/training policy questions. The framework itself is
+        # still surfaced via `langchain-core` / `langchain` imports.
         "langchain": "langchain", "langchain-core": "langchain",
-        "langchain-community": "langchain", "langchain-openai": "langchain",
-        "langchain-anthropic": "langchain",
+        "langchain-community": "langchain",
+        "langchain-openai": "openai",
+        "langchain-anthropic": "anthropic",
+        "langchain-google-genai": "google_ai",
+        "langchain-google-vertexai": "google_ai",
+        "langchain-mistralai": "mistral",
+        "langchain-cohere": "cohere",
+        "langchain-aws": "aws_bedrock",
+        "langchain-huggingface": "huggingface",
+        "langchain-ollama": "ollama",
+        "langchain-chroma": "chromadb",
+        "langchain-pinecone": "pinecone",
+        "langchain-qdrant": "qdrant",
+        "langchain-weaviate": "weaviate",
+        "@langchain/openai": "openai",
+        "@langchain/anthropic": "anthropic",
+        "@langchain/google-genai": "google_ai",
+        "@langchain/community": "langchain",
         "llama-index": "llamaindex", "llamaindex": "llamaindex",
         "transformers": "huggingface", "huggingface-hub": "huggingface",
         "diffusers": "huggingface", "accelerate": "huggingface",
@@ -1017,8 +1241,6 @@ def _package_to_provider(pkg: str) -> str:
         "@mistralai/mistralai": "mistral",
         "@aws-sdk/client-bedrock-runtime": "aws_bedrock",
         "@langchain/core": "langchain",
-        "@langchain/openai": "langchain",
-        "@langchain/anthropic": "langchain",
     }
     return mapping.get(pkg, pkg)
 

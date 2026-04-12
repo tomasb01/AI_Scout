@@ -1,5 +1,5 @@
 {
-  "asset_count": 2,
+  "asset_count": 4,
   "assets": [
     {
       "code_contexts": [
@@ -94,7 +94,7 @@
         }
       ],
       "repository": "fixtures",
-      "risk_score": 0.85,
+      "risk_score": 0.7,
       "tags": [
         "chatbot"
       ],
@@ -233,7 +233,7 @@
         }
       ],
       "repository": "fixtures",
-      "risk_score": 0.7,
+      "risk_score": 0.48,
       "tags": [
         "chatbot",
         "fine_tuning",
@@ -246,10 +246,141 @@
         "fine_tuning"
       ],
       "type": "mcp_server"
+    },
+    {
+      "code_contexts": [],
+      "dependencies": [
+        "chromadb==0.3.26",
+        "langchain==0.0.340",
+        "openai==0.28.1"
+      ],
+      "discovered_via": [
+        "git_scanner"
+      ],
+      "file_paths": [
+        "sprint3/llm_config.yaml",
+        "sprint3/requirements.txt"
+      ],
+      "name": "Sprint3",
+      "provider": "azure_openai",
+      "raw_findings": [
+        {
+          "content": "config: gpt-4o-prod-eu",
+          "file_path": "sprint3/llm_config.yaml",
+          "line_number": 3,
+          "provider": "azure_openai",
+          "redacted_content": null,
+          "type": "config_detected"
+        },
+        {
+          "content": "config: claude-3-5-sonnet-20241022",
+          "file_path": "sprint3/llm_config.yaml",
+          "line_number": 6,
+          "provider": "openai",
+          "redacted_content": null,
+          "type": "config_detected"
+        },
+        {
+          "content": "config: llama3.1:8b",
+          "file_path": "sprint3/llm_config.yaml",
+          "line_number": 7,
+          "provider": "openai",
+          "redacted_content": null,
+          "type": "config_detected"
+        },
+        {
+          "content": "config: llama3.1:8b",
+          "file_path": "sprint3/llm_config.yaml",
+          "line_number": 7,
+          "provider": "ollama",
+          "redacted_content": null,
+          "type": "config_detected"
+        },
+        {
+          "content": "openai==0.28.1",
+          "file_path": "sprint3/requirements.txt",
+          "line_number": 3,
+          "provider": "openai",
+          "redacted_content": null,
+          "type": "dependency_detected"
+        },
+        {
+          "content": "langchain==0.0.340",
+          "file_path": "sprint3/requirements.txt",
+          "line_number": 4,
+          "provider": "langchain",
+          "redacted_content": null,
+          "type": "dependency_detected"
+        },
+        {
+          "content": "chromadb==0.3.26",
+          "file_path": "sprint3/requirements.txt",
+          "line_number": 5,
+          "provider": "chromadb",
+          "redacted_content": null,
+          "type": "dependency_detected"
+        }
+      ],
+      "repository": "fixtures",
+      "risk_score": 0.52,
+      "tags": [
+        "rag"
+      ],
+      "task_types": [
+        "inference"
+      ],
+      "type": "custom_code"
+    },
+    {
+      "code_contexts": [],
+      "dependencies": [],
+      "discovered_via": [
+        "git_scanner"
+      ],
+      "file_paths": [
+        "sprint3/.github/workflows/llm-review.yml"
+      ],
+      "name": "Sprint3 — Workflows",
+      "provider": "anthropic",
+      "raw_findings": [
+        {
+          "content": "CI: Claude GitHub Action",
+          "file_path": "sprint3/.github/workflows/llm-review.yml",
+          "line_number": 12,
+          "provider": "anthropic",
+          "redacted_content": null,
+          "type": "config_detected"
+        },
+        {
+          "content": "CI: Anthropic credential in CI",
+          "file_path": "sprint3/.github/workflows/llm-review.yml",
+          "line_number": 16,
+          "provider": "anthropic",
+          "redacted_content": null,
+          "type": "config_detected"
+        },
+        {
+          "content": "CI: CI runs a training script",
+          "file_path": "sprint3/.github/workflows/llm-review.yml",
+          "line_number": 18,
+          "provider": "huggingface",
+          "redacted_content": null,
+          "type": "config_detected"
+        }
+      ],
+      "repository": "fixtures",
+      "risk_score": 0.12,
+      "tags": [
+        "local_model"
+      ],
+      "task_types": [
+        "inference"
+      ],
+      "type": "custom_code"
     }
   ],
   "errors": [],
-  "files_scanned": 8,
+  "files_scanned": 11,
   "insights": [
     {
       "asset_name": "Anthropic (Claude) Integration",
@@ -280,35 +411,22 @@
       "recommendations": [
         "Move API keys to environment variables or a secret manager (e.g., HashiCorp Vault, AWS Secrets Manager, Azure Key Vault).",
         "Rotate the exposed key(s) immediately — they may already be compromised if the repository has been shared or is public.",
-        "Add API key patterns to your .gitignore and pre-commit hooks.",
-        "Verify GDPR compliance: ensure a DPA is signed with the provider and data residency is configured for EU region if required.",
-        "Consider enterprise tier: Enterprise plan with DPA, SSO, admin controls, no training on data.",
-        "Confirm which tier/plan is being used. Switch to a paid API or enterprise plan with contractual opt-out from data training."
+        "Add API key patterns to your .gitignore and pre-commit hooks."
       ],
       "risk_reasons": [
         {
-          "detail": "Found 1 API key directly in code (sample_py.py). Anyone with repository access can extract and misuse these keys. Keys should be stored in environment variables or a secret manager.",
+          "detail": "Found 1 API key directly in code (sample_py.py). Anyone with repository access can extract and misuse these keys. Rotate immediately and move to an environment variable or secret manager.",
           "severity": "critical",
           "title": "Hardcoded API key in source code"
         },
         {
-          "detail": "Anthropic (Claude) processes data in: US. If your organization is subject to GDPR or data residency requirements, verify that a Data Processing Agreement (DPA) is in place and data residency is configured appropriately.",
-          "severity": "warning",
-          "title": "Data may leave the EU"
-        },
-        {
-          "detail": "Anthropic (Claude) training policy: API: data not used for training by default. Free tier (claude.ai): data may be used. Enterprise: contractual guarantees. Verify which tier/plan is being used and whether data opt-out is configured.",
-          "severity": "warning",
-          "title": "Data may be used for model training"
-        },
-        {
-          "detail": "This integration sends data to Anthropic (Claude) (Anthropic, PBC) for processing. Data is transmitted outside your infrastructure. Vendor: Anthropic, PBC.",
+          "detail": "Data is processed by Anthropic (Claude) (Anthropic, PBC). Residency: US. Training policy: API: data not used for training by default. Free tier (claude.ai): data may be used. Enterprise: contractual guarantees.",
           "severity": "info",
-          "title": "Data sent to external AI API"
+          "title": "External AI API: Anthropic (Claude)"
         }
       ],
       "solution_name": "History",
-      "summary": "You are Fleurdin, a helpful florist assistant specialized in essential oils and aromatherapy. API endpoints: chat(). Reads from: database, database (MESSAGES). Outputs to: external API ().",
+      "summary": "Conversational chatbot powered by Anthropic (Claude). You are Fleurdin, a helpful florist assistant specialized in essential oils and aromatherapy. API endpoints: chat(). Reads from: database, database (MESSAGES). Outputs to: external API ().",
       "tech_stack": [
         "Anthropic (Claude)",
         "LangChain",
@@ -344,13 +462,14 @@
         "vendor": "Microsoft Azure"
       },
       "recommendations": [
-        "Review what data is being sent to the API. Ensure no PII, confidential, or regulated data is transmitted without appropriate controls."
+        "Document this AI integration in your organization's AI asset inventory.",
+        "Review the integration against your AI governance policy."
       ],
       "risk_reasons": [
         {
-          "detail": "This integration sends data to Azure OpenAI (Microsoft Azure) for processing. Data is transmitted outside your infrastructure. Vendor: Microsoft Azure.",
-          "severity": "warning",
-          "title": "Data sent to external AI API"
+          "detail": "Data is processed by Azure OpenAI (Microsoft Azure). Residency: customer-selected Azure region (EU, US, UK, …). Training policy: Data is NOT sent to OpenAI and is NOT used to train models. Stays within the customer's Azure tenant.",
+          "severity": "info",
+          "title": "External AI API: Azure OpenAI"
         },
         {
           "detail": "This asset appears to fine-tuning a model. Training pipelines typically consume real production data (logs, customer messages, documents), so they carry higher privacy, IP-leakage and compute-cost risk than plain inference. Verify data provenance, access controls on the training set, and that resulting model weights are stored in a governed artifact repository.",
@@ -358,9 +477,9 @@
           "title": "Fine-tuning pipeline ingests training data"
         },
         {
-          "detail": "Model Context Protocol server(s) give an LLM application privileged access to local tools, filesystems or remote APIs. Each configured server is a potential data-exfiltration vector and should be audited individually. Configured servers: filesystem, github.",
-          "severity": "warning",
-          "title": "MCP servers expose tool access to the model"
+          "detail": "This asset uses Model Context Protocol to call one or more external MCP servers. The data sent to each server depends on the server's implementation — review each server before granting it access to production prompts. Configured servers: filesystem, github.",
+          "severity": "info",
+          "title": "MCP client — consumes external tool servers"
         },
         {
           "detail": "Docker/Compose files declare an AI runtime or vector store: Ollama runtime, Qdrant vector DB, vLLM inference server. Self-hosting keeps data on-prem but requires you to patch the runtime, monitor resource use, and secure the management endpoints.",
@@ -374,13 +493,115 @@
         }
       ],
       "solution_name": "An internal support assistant for the FleurCorp helpdesk",
-      "summary": "Role: \"an internal support assistant for the FleurCorp helpdesk\". Key functions: answer. AI calls: client.chat.completions.create.",
+      "summary": "Fine-tuning Llama 3 via LoRA/PEFT. Role: \"an internal support assistant for the FleurCorp helpdesk\". Key functions: answer. AI calls: client.chat.completions.create.",
       "tech_stack": [
         "Azure OpenAI",
         "Hugging Face",
         "Model Context Protocol",
         "Ollama",
         "Qdrant"
+      ]
+    },
+    {
+      "asset_name": "Sprint3",
+      "category": "Other AI Solutions",
+      "data_involved": [],
+      "provider_profile": {
+        "category": "llm_api",
+        "certifications": [
+          "SOC 1/2/3",
+          "ISO 27001",
+          "HIPAA",
+          "FedRAMP High",
+          "GDPR DPA"
+        ],
+        "data_residency": [
+          "customer-selected Azure region (EU, US, UK, …)"
+        ],
+        "description": "OpenAI models (GPT-4, GPT-4o, embeddings) hosted in Azure tenants with private networking, separate DPA and regional deployment control.",
+        "display_name": "Azure OpenAI",
+        "docs_url": "https://learn.microsoft.com/azure/ai-services/openai/",
+        "enterprise_note": "Private endpoints, VNet integration, Customer-Managed Keys, Azure AD auth, content filtering configurable.",
+        "free_tier_risk": "No free tier. Access requires an Azure subscription and Microsoft application approval.",
+        "name": "azure_openai",
+        "training_policy": "Data is NOT sent to OpenAI and is NOT used to train models. Stays within the customer's Azure tenant.",
+        "vendor": "Microsoft Azure"
+      },
+      "recommendations": [
+        "Document this AI integration in your organization's AI asset inventory.",
+        "Review the integration against your AI governance policy."
+      ],
+      "risk_reasons": [
+        {
+          "detail": "Data is processed by Azure OpenAI (Microsoft Azure). Residency: customer-selected Azure region (EU, US, UK, …). Training policy: Data is NOT sent to OpenAI and is NOT used to train models. Stays within the customer's Azure tenant.",
+          "severity": "info",
+          "title": "External AI API: Azure OpenAI"
+        },
+        {
+          "detail": "ChromaDB < 0.4 uses the legacy DuckDB/parquet backend that is no longer tested upstream and will refuse to load in newer client versions. Migrate the collection to >=0.4.",
+          "severity": "warning",
+          "title": "ChromaDB < 0.4 (unsupported schema)"
+        },
+        {
+          "detail": "LangChain versions below 0.1 predate the core/community split and have multiple documented prompt-injection and code-execution issues (CVE-2023-36095, CVE-2023-44467 et al.). Upgrade to the latest 0.2+ series and move integration code to the split packages (``langchain-openai``, …).",
+          "severity": "warning",
+          "title": "LangChain < 0.1 (pre-split, unsupported)"
+        },
+        {
+          "detail": "The 0.x OpenAI Python SDK uses the legacy API surface and is no longer receiving security or compatibility fixes. Upgrade to >=1.0 and migrate any ``openai.Completion`` / ``openai.ChatCompletion`` calls to the new client API.",
+          "severity": "warning",
+          "title": "OpenAI SDK < 1.0 (legacy API)"
+        }
+      ],
+      "solution_name": "Sprint3",
+      "summary": "Retrieval-augmented generation pipeline backed by Azure OpenAI.",
+      "tech_stack": [
+        "Azure OpenAI",
+        "ChromaDB",
+        "LangChain",
+        "Ollama",
+        "OpenAI"
+      ]
+    },
+    {
+      "asset_name": "Sprint3 — Workflows",
+      "category": "Workflows & Pipelines",
+      "data_involved": [],
+      "provider_profile": {
+        "category": "llm_api",
+        "certifications": [
+          "SOC 2 Type II",
+          "HIPAA eligible",
+          "GDPR DPA available"
+        ],
+        "data_residency": [
+          "US"
+        ],
+        "description": "Claude model family API. Used for text generation, analysis, code, and agentic tasks.",
+        "display_name": "Anthropic (Claude)",
+        "docs_url": "https://docs.anthropic.com",
+        "enterprise_note": "Enterprise plan with DPA, SSO, admin controls, no training on data.",
+        "free_tier_risk": "Personal claude.ai usage may contribute data to training. API usage does not by default.",
+        "name": "anthropic",
+        "training_policy": "API: data not used for training by default. Free tier (claude.ai): data may be used. Enterprise: contractual guarantees.",
+        "vendor": "Anthropic, PBC"
+      },
+      "recommendations": [
+        "Document this AI integration in your organization's AI asset inventory.",
+        "Review the integration against your AI governance policy."
+      ],
+      "risk_reasons": [
+        {
+          "detail": "Data is processed by Anthropic (Claude) (Anthropic, PBC). Residency: US. Training policy: API: data not used for training by default. Free tier (claude.ai): data may be used. Enterprise: contractual guarantees.",
+          "severity": "info",
+          "title": "External AI API: Anthropic (Claude)"
+        }
+      ],
+      "solution_name": "Workflows & Pipelines — Workflows",
+      "summary": "Local inference on a large language model.",
+      "tech_stack": [
+        "Anthropic (Claude)",
+        "Hugging Face"
       ]
     }
   ],

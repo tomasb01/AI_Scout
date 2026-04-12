@@ -1,0 +1,6 @@
+# Deliberately uses the legacy OpenAI SDK and an unsupported LangChain
+# release so the advisory KB flags them.
+openai==0.28.1
+langchain==0.0.340
+chromadb==0.3.26
+flask

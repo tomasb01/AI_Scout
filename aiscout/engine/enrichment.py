@@ -6,6 +6,10 @@ from dataclasses import dataclass, field
 
 import re
 
+from aiscout.knowledge.dependency_advisories import (
+    Advisory,
+    find_advisories,
+)
 from aiscout.knowledge.providers import ProviderProfile, get_provider
 from aiscout.models import AIAsset, Finding, FindingType, TaskType
 
@@ -164,6 +168,17 @@ def _collect_code_text(asset: AIAsset) -> str:
     return " ".join(p for p in parts if p).lower()
 
 
+_FINE_TUNE_DEP_MARKERS = (
+    "peft", "trl", "bitsandbytes", "auto-gptq", "unsloth",
+)
+_TRAINING_DEP_MARKERS = (
+    "accelerate", "deepspeed", "torch", "tensorflow", "keras",
+)
+_FINE_TUNE_API_MARKERS = (
+    "fine_tuning.jobs", "client.fine_tuning", "finetune", "create_fine_tune",
+)
+
+
 def _detect_task_types(asset: AIAsset) -> list[TaskType]:
     """Infer what the asset *does* with the model.
 
@@ -172,27 +187,73 @@ def _detect_task_types(asset: AIAsset) -> list[TaskType]:
     lower risk but still worth surfacing because it indicates an active
     ML lifecycle rather than a shipped feature.
 
-    Any asset with zero positive signals defaults to ``INFERENCE`` — the
-    overwhelmingly common case — rather than ``UNKNOWN``, which would hide
-    it from reports that filter by task type.
+    Signal sources (strongest → weakest):
+      1. Explicit training classes/calls in code body (Trainer, .train(),
+         optimizer.step)
+      2. Training-specific dependencies (peft, trl, bitsandbytes)
+      3. Fine-tuning API calls (OpenAI fine_tuning.jobs.create, etc.)
+      4. File path contains "train" / "finetune"
     """
     text = _collect_code_text(asset)
+    deps_lower = " ".join(d.lower() for d in asset.dependencies)
     types: list[TaskType] = []
-    if any(k in text for k in _FINE_TUNE_KEYWORDS):
+
+    # API calls — stable signal even when code body preview is thin
+    api_texts: list[str] = []
+    for ctx in asset.code_contexts:
+        for call in ctx.api_calls:
+            api_texts.append(call.get("target", "").lower())
+            api_texts.append(call.get("args_preview", "").lower())
+    api_text = " ".join(api_texts)
+
+    fine_tune = (
+        any(k in text for k in _FINE_TUNE_KEYWORDS)
+        or any(m in deps_lower for m in _FINE_TUNE_DEP_MARKERS)
+        or any(m in api_text for m in _FINE_TUNE_API_MARKERS)
+    )
+    if fine_tune:
         types.append(TaskType.FINE_TUNING)
-    if any(k in text for k in _TRAINING_KEYWORDS) and TaskType.FINE_TUNING not in types:
+
+    training = (
+        any(k in text for k in _TRAINING_KEYWORDS)
+        or ("transformers" in deps_lower and any(
+            m in deps_lower for m in _TRAINING_DEP_MARKERS
+        ))
+    )
+    if training and TaskType.FINE_TUNING not in types:
         types.append(TaskType.TRAINING)
+
     if any(k in text for k in _EVAL_KEYWORDS):
         types.append(TaskType.EVALUATION)
-    # Heuristic: a file path that literally says "train" or "finetune" is a
-    # strong signal even if keyword detection missed it.
-    path_lower = asset.file_path.lower()
-    if ("train" in path_lower or "fine_tun" in path_lower or "finetune" in path_lower):
+
+    # Heuristic: leaf directory literally says "train" or "finetune".
+    # We *only* look at the last two path components of the FIRST file so
+    # grand-parent noise (e.g. a top-level "4-openai-and-finetuning/"
+    # dir that also holds plain inference examples) doesn't falsely
+    # promote every descendant to training.
+    first_file = (asset.file_path or "").split(", ")[0]
+    leaf_parts = first_file.lower().split("/")[-3:-1]  # parent + grandparent
+    leaf_context = "/".join(leaf_parts)
+    train_markers = ("train", "finetun", "fine_tun", "fine-tun", "sft", "rlhf")
+    if any(m in leaf_context for m in train_markers):
         if TaskType.TRAINING not in types and TaskType.FINE_TUNING not in types:
-            types.append(TaskType.TRAINING)
+            if any(m in leaf_context for m in ("lora", "peft", "qlora", "sft")):
+                types.append(TaskType.FINE_TUNING)
+            else:
+                types.append(TaskType.TRAINING)
+
     if not types:
         types.append(TaskType.INFERENCE)
     return sorted(set(types), key=lambda t: t.value)
+
+
+_LOCAL_MODEL_PROVIDERS = {
+    "ollama", "huggingface", "llamacpp", "vllm", "localai",
+    "pytorch", "onnx", "coreml", "tflite",
+}
+_VECTOR_PROVIDERS = {
+    "chromadb", "pinecone", "qdrant", "weaviate", "faiss", "milvus",
+}
 
 
 def _derive_tags(asset: AIAsset) -> list[str]:
@@ -201,13 +262,22 @@ def _derive_tags(asset: AIAsset) -> list[str]:
     Tags describe the *kind* of AI workload (chatbot, RAG, agent,
     training, …) — orthogonal to the provider. They feed the report
     filter chips and Sprint-2 sub-component view.
+
+    Signal cascade:
+      1. Keyword rules over all collected code text (chatbot, rag, …)
+      2. Finding-type promotion (CONTAINER_DETECTED, LOCAL_MODEL_DETECTED)
+      3. Fallback from providers / deps / path when the rules return
+         nothing — ensures every asset gets at least one meaningful tag
+         even when code context is thin (e.g. notebook with no docstrings).
     """
     text = _collect_code_text(asset)
     tags: set[str] = set()
     for tag, keywords in _TAG_RULES:
         if any(k in text for k in keywords):
             tags.add(tag)
+
     # Promote tags from findings themselves (containers + providers)
+    finding_providers: set[str] = set()
     for f in asset.raw_findings:
         if f.type == FindingType.CONTAINER_DETECTED:
             tags.add("local_model")
@@ -215,6 +285,40 @@ def _derive_tags(asset: AIAsset) -> list[str]:
             tags.add("local_model")
         if f.provider == "mcp":
             tags.add("mcp")
+        if f.provider:
+            finding_providers.add(f.provider)
+
+    deps_lower = " ".join(d.lower() for d in asset.dependencies)
+    path_lower = asset.file_path.lower()
+
+    # Fallbacks — fire only when keyword detection didn't cover the
+    # asset, so we don't over-tag things that already have strong signals.
+    if not any(t in tags for t in ("rag", "agent", "chatbot", "training", "fine_tuning")):
+        if finding_providers & _LOCAL_MODEL_PROVIDERS:
+            tags.add("local_model")
+        if finding_providers & _VECTOR_PROVIDERS:
+            tags.add("rag")
+
+    if "agent" not in tags and any(kw in path_lower for kw in (
+        "/agent", "agent/", "agents/", "crew", "autogen", "langgraph",
+    )):
+        tags.add("agent")
+
+    if "chatbot" not in tags and any(kw in path_lower for kw in (
+        "chatbot", "chat_bot", "/chat", "conversation",
+    )):
+        tags.add("chatbot")
+
+    if "rag" not in tags and any(kw in path_lower for kw in (
+        "/rag", "rag_", "_rag", "retriev", "embedding",
+    )):
+        tags.add("rag")
+
+    if not tags:
+        # Absolute last resort: tell the reader this is inference code
+        if "transformers" in deps_lower or finding_providers & {"huggingface"}:
+            tags.add("local_model")
+
     return sorted(tags)
 
 
@@ -224,23 +328,147 @@ def _derive_tags(asset: AIAsset) -> list[str]:
 def _build_summary(asset: AIAsset, provider: ProviderProfile | None) -> str:
     """Generate a summary focused on WHAT the solution does.
 
-    Priority: LLM classification > code context > directory context > provider.
+    Priority:
+      0. LLM classification (highest — most accurate when available)
+      1. Synthesised purpose from strong signals (task_type + tags +
+         model_names + provider) — deterministic, beats noisy README
+         extraction for fine-tuning scripts, local inference notebooks,
+         MCP servers, …
+      2. Code-context inference (prompts, docstrings, README, functions)
+      3. Directory context + provider (last resort)
     """
-    # Priority 0: LLM classification (most accurate when available)
     if asset.data_classification and asset.data_classification.details:
         return asset.data_classification.details
 
-    purpose = _infer_purpose(asset)
+    synth = _synthesize_purpose(asset, provider)
+    if synth:
+        # If code context *also* gives us a rich purpose (docstrings,
+        # prompts), append it after the synth one-liner — the synth
+        # sentence answers "what is this", the inferred part adds "how".
+        extra = _infer_purpose(asset)
+        if extra and _is_descriptive(extra):
+            return f"{synth} {extra}"
+        return synth
 
+    purpose = _infer_purpose(asset)
     if purpose:
         return purpose
 
-    # Fallback: directory context + provider
     dir_context = _get_dir_context(asset)
     provider_name = provider.display_name if provider else "unknown"
     if dir_context:
         return f"{dir_context} AI solution using {provider_name}."
     return f"AI solution using {provider_name}."
+
+
+_SYNTH_MODELS = (
+    ("mistral", "Mistral"), ("llama-3", "Llama 3"), ("llama3", "Llama 3"),
+    ("llama-2", "Llama 2"), ("llama2", "Llama 2"), ("llama", "Llama"),
+    ("qwen", "Qwen"), ("gemma", "Gemma"), ("phi-3", "Phi-3"), ("phi3", "Phi-3"),
+    ("falcon", "Falcon"), ("mixtral", "Mixtral"), ("deepseek", "DeepSeek"),
+    ("gpt-4o", "GPT-4o"), ("gpt-4", "GPT-4"), ("gpt-3.5", "GPT-3.5"),
+    ("claude-3.5", "Claude 3.5"), ("claude-3", "Claude 3"), ("claude", "Claude"),
+    ("gemini", "Gemini"), ("whisper", "Whisper"), ("bert", "BERT"),
+    ("stable-diffusion", "Stable Diffusion"), ("dall-e", "DALL-E"),
+)
+
+
+def _guess_model_family(asset: AIAsset) -> str:
+    """Find the most-likely model family name referenced by the asset."""
+    haystacks = [asset.file_path.lower(), asset.name.lower()]
+    for ctx in asset.code_contexts:
+        haystacks.extend(m.lower() for m in ctx.model_names)
+        for func in ctx.functions:
+            haystacks.append(func.get("body_preview", "").lower())
+    combined = " ".join(haystacks)
+    for needle, display in _SYNTH_MODELS:
+        if needle in combined:
+            return display
+    return ""
+
+
+def _synthesize_purpose(
+    asset: AIAsset, provider: ProviderProfile | None
+) -> str:
+    """Build a deterministic one-sentence purpose from strong signals.
+
+    Only fires when the asset has clear task-type + tag evidence. The
+    output is opinionated: it answers "what does this AI solution do?"
+    in a form an auditor can scan quickly, without depending on
+    whatever noise a README may contain.
+
+    Returns an empty string if signals are too weak — the caller then
+    falls through to code-context / README inference.
+    """
+    task_types = set(asset.task_types)
+    tags = set(asset.tags)
+    provider_display = provider.display_name if provider else ""
+    model = _guess_model_family(asset)
+
+    def with_model(prefix: str) -> str:
+        return f"{prefix} {model}." if model else f"{prefix} a large language model."
+
+    # ── Training / fine-tuning ──
+    if TaskType.FINE_TUNING in task_types:
+        base = with_model("Fine-tuning")
+        if "peft" in " ".join(asset.dependencies).lower() or "lora" in asset.file_path.lower():
+            base = base.rstrip(".") + " via LoRA/PEFT."
+        return base
+    if TaskType.TRAINING in task_types:
+        return with_model("Model training pipeline for")
+
+    # ── Agent / tool-using LLM ──
+    if "agent" in tags:
+        if "mcp" in tags:
+            return "AI agent that calls tools via Model Context Protocol (MCP) servers."
+        if "local_model" in tags:
+            return f"AI agent running on a local model runtime ({provider_display or 'local'})."
+        if provider_display:
+            return f"AI agent backed by {provider_display}."
+        return "AI agent with tool-using capabilities."
+
+    # ── RAG ──
+    if "rag" in tags:
+        backend = provider_display or model or "an LLM"
+        return f"Retrieval-augmented generation pipeline backed by {backend}."
+
+    # ── MCP server (no agent client) ──
+    if "mcp" in tags:
+        if _asset_is_mcp_server(asset):
+            return "Model Context Protocol server exposing tools to LLM clients."
+        return "LLM application that consumes tools from MCP servers."
+
+    # ── Chatbot ──
+    if "chatbot" in tags:
+        who = provider_display or model or "an LLM"
+        return f"Conversational chatbot powered by {who}."
+
+    # ── Transcription / image generation ──
+    if "transcription" in tags:
+        return "Speech-to-text / audio transcription pipeline."
+    if "image_generation" in tags:
+        return "Image generation pipeline."
+
+    # ── Local-model inference (Model & Inference category) ──
+    if "local_model" in tags and TaskType.INFERENCE in task_types:
+        return with_model("Local inference on")
+
+    return ""
+
+
+def _is_descriptive(text: str) -> bool:
+    """Reject noisy one-liners that don't describe what the code does."""
+    if not text or len(text.strip()) < 12:
+        return False
+    noisy = (
+        "run in terminal", "run the", "install ", "pip install",
+        "getting started", "usage:", "todo", "fixme",
+        "this folder", "this directory", "step 1", "step 2",
+    )
+    low = text.lower().strip()
+    if any(low.startswith(n) for n in noisy):
+        return False
+    return True
 
 
 def _get_dir_context(asset: AIAsset) -> str:
@@ -317,12 +545,35 @@ def _infer_from_code_contexts(asset: AIAsset) -> str:
     # ── Priority 1: README content ──
     if all_readmes:
         readme_text = all_readmes[0]
-        # Extract first meaningful paragraph from README
         lines = [l.strip() for l in readme_text.split("\n") if l.strip()]
-        # Skip title lines (# headings)
-        content_lines = [l for l in lines if not l.startswith("#") and len(l) > 20]
-        if content_lines:
-            parts.append(content_lines[0][:200] + ("." if not content_lines[0].endswith(".") else ""))
+        # Skip markdown headings, code fences, shell commands, imperatives
+        # and other non-descriptive boilerplate so the summary describes
+        # the project instead of "Run in terminal commands."
+        def _is_descriptive_line(line: str) -> bool:
+            if len(line) < 25:
+                return False
+            if line.startswith(("#", "```", "> ", "- ", "* ", "|", "![")):
+                return False
+            low = line.lower()
+            imperative_prefixes = (
+                "run ", "install ", "pip install", "npm install",
+                "cd ", "git clone", "python ", "uv ", "poetry ",
+                "note:", "todo", "fixme", "click ", "open ",
+                "go to ", "first, ", "then, ", "next, ",
+            )
+            if any(low.startswith(p) for p in imperative_prefixes):
+                return False
+            # Skip pure shell commands with flags
+            if re.match(r"^[\w./-]+\s+(?:-{1,2}[\w-]+\s*)+", line):
+                return False
+            return True
+
+        descriptive = [l for l in lines if _is_descriptive_line(l)]
+        if descriptive:
+            chosen = descriptive[0][:200]
+            if not chosen.endswith("."):
+                chosen += "."
+            parts.append(chosen)
 
     # ── Prompts tell us about purpose ──
     if all_prompts:
@@ -368,7 +619,6 @@ def _infer_from_code_contexts(asset: AIAsset) -> str:
             detail = src.get("detail", "").upper()
             if "SELECT" in detail:
                 # Extract table name
-                import re
                 table_match = re.search(r'FROM\s+(\w+)', detail, re.IGNORECASE)
                 if table_match:
                     source_types.add(f"database ({table_match.group(1)})")
@@ -538,16 +788,97 @@ def _extract_model_names(text: str) -> list[str]:
 # ── Risk reasoning ────────────────────────────────────────────────────────
 
 
+_PII_KEYWORDS = (
+    "personal data", "pii", "email", "phone", "address",
+    "customer name", "customer_name", "user_name", "full name",
+    "date of birth", "ssn", "passport", "national id",
+    "medical", "patient", "health record", "diagnosis",
+    "financial", "credit card", "bank account", "iban", "salary",
+)
+
+
+def _asset_processes_pii(asset: AIAsset) -> bool:
+    """Return True when the asset likely handles personal / sensitive data.
+
+    Signals are combined: explicit ``data_classification`` from an LLM
+    run, data_involved tags produced by ``_extract_data_involved``, and
+    keyword matches against code-context text. We prefer *false negative*
+    over *false positive* — a PII tag escalates risk severity, so we
+    only assert it when the evidence is reasonably clear.
+    """
+    if asset.data_classification:
+        for cat in asset.data_classification.categories:
+            if cat.value in ("pii", "financial"):
+                return True
+    text = _collect_code_text(asset)
+    return any(kw in text for kw in _PII_KEYWORDS)
+
+
+def _asset_is_mcp_server(asset: AIAsset) -> bool:
+    """Distinguish MCP *server* (exposes tools) from MCP *client* (uses servers).
+
+    Servers import ``mcp.server`` or declare their entrypoint as an MCP
+    server via ``fastmcp`` / ``@server.tool`` decorators. Clients import
+    ``langchain_mcp_adapters`` / use ``MultiServerMCPClient`` etc.
+    """
+    text = _collect_code_text(asset)
+    server_markers = (
+        "mcp.server", "fastmcp", "server.tool", "@server.", "mcp_server",
+        "stdio_server", "sse_server",
+    )
+    client_markers = (
+        "multiservermcpclient", "langchain_mcp_adapters",
+        "streamablehttp_client", "stdio_client", "sse_client",
+        "mcp.client",
+    )
+    has_server = any(m in text for m in server_markers)
+    has_client = any(m in text for m in client_markers)
+    if has_server and not has_client:
+        return True
+    # If only a config file was found (mcp.json with server list), the
+    # asset is a client that *configures* servers.
+    if any(f.type == FindingType.CONFIG_DETECTED and f.provider == "mcp"
+           for f in asset.raw_findings) and not has_server:
+        return False
+    return has_server
+
+
 def _build_risk_reasons(
     asset: AIAsset, provider: ProviderProfile | None
 ) -> list[RiskReason]:
-    """Generate specific reasons for the risk classification."""
-    reasons = []
+    """Generate specific reasons for the risk classification.
 
-    # ── Critical reasons ──
+    Sprint 3 design — risk is *action + context*, not *mere existence*:
 
-    # Hardcoded API keys
-    key_findings = [f for f in asset.raw_findings if f.type == FindingType.API_KEY_DETECTED]
+    * **critical** = concrete incident: secret committed to source, PII
+      flowing to free-tier / untested provider, known-vulnerable dep with
+      public exploit. Requires same-day remediation.
+    * **warning** = requires review: training/fine-tuning pipelines,
+      MCP server exposing tools, deprecated deps, PII + external API with
+      unclear tier.
+    * **info** = context so the reader understands where data flows, but
+      not in itself something to fix (provider residency, framework,
+      local runtime, external API to known-safe provider).
+
+    The previous iteration emitted a warning for *every* LLM API call
+    ("Data sent to external AI API"), which flooded the report — every
+    OpenAI asset got 2-3 reflexive warnings. Now a plain inference asset
+    with a known-safe provider surfaces ONE info line with the facts; a
+    warning only appears when a risk-amplifying signal (PII flow, free
+    tier, training, …) is also present.
+    """
+    reasons: list[RiskReason] = []
+
+    key_findings = [
+        f for f in asset.raw_findings if f.type == FindingType.API_KEY_DETECTED
+    ]
+    processes_pii = _asset_processes_pii(asset)
+    is_free_tier_risk = (
+        provider is not None and "may be used" in provider.training_policy.lower()
+    )
+
+    # ── CRITICAL — immediate action required ────────────────────────────
+
     if key_findings:
         files = sorted({f.file_path for f in key_findings})
         reasons.append(RiskReason(
@@ -555,65 +886,75 @@ def _build_risk_reasons(
             title="Hardcoded API key in source code",
             detail=(
                 f"Found {len(key_findings)} API key{'s' if len(key_findings) > 1 else ''} "
-                f"directly in code ({', '.join(files)}). "
-                "Anyone with repository access can extract and misuse these keys. "
-                "Keys should be stored in environment variables or a secret manager."
+                f"directly in code ({', '.join(files)}). Anyone with repository "
+                "access can extract and misuse these keys. Rotate immediately and "
+                "move to an environment variable or secret manager."
             ),
         ))
 
-    # ── Warning reasons ──
+    if (
+        processes_pii
+        and provider is not None
+        and provider.category == "llm_api"
+        and is_free_tier_risk
+    ):
+        reasons.append(RiskReason(
+            severity="critical",
+            title="Personal data flows to provider with training-on-data risk",
+            detail=(
+                f"This asset processes personal / PII data and sends it to "
+                f"{provider.display_name}, whose free tier may use submitted "
+                "data for model training. Confirm the paid API / enterprise plan "
+                "is in use and that a DPA is signed, or remove PII from prompts."
+            ),
+        ))
 
-    # Data leaves EU
-    if provider and provider.data_residency:
-        non_eu = [
-            r for r in provider.data_residency
-            if "EU" not in r and "local" not in r.lower() and "depends" not in r.lower()
-        ]
-        if non_eu and not any("EU" in r for r in provider.data_residency):
-            reasons.append(RiskReason(
-                severity="warning",
-                title="Data may leave the EU",
-                detail=(
-                    f"{provider.display_name} processes data in: "
-                    f"{', '.join(provider.data_residency)}. "
-                    "If your organization is subject to GDPR or data residency requirements, "
-                    "verify that a Data Processing Agreement (DPA) is in place and data "
-                    "residency is configured appropriately."
-                ),
-            ))
+    # ── WARNING — requires review ───────────────────────────────────────
 
-    # Training policy risk
-    if provider and "may be used" in provider.training_policy.lower():
+    if (
+        processes_pii
+        and provider is not None
+        and provider.category in ("llm_api", "embedding_db")
+        and not any(r.severity == "critical" for r in reasons)
+    ):
         reasons.append(RiskReason(
             severity="warning",
-            title="Data may be used for model training",
+            title="Personal data sent to external provider",
             detail=(
-                f"{provider.display_name} training policy: {provider.training_policy} "
-                "Verify which tier/plan is being used and whether data opt-out is configured."
+                f"Personal / PII data is processed by this asset and flows to "
+                f"{provider.display_name}. Verify the relationship has a DPA, "
+                "that data residency matches your compliance requirements, and "
+                "that operators of the service have appropriate access controls."
             ),
         ))
 
-    # External API usage (data egress)
-    if provider and provider.category == "llm_api":
-        reasons.append(RiskReason(
-            severity="warning" if not key_findings else "info",
-            title="Data sent to external AI API",
-            detail=(
-                f"This integration sends data to {provider.display_name} ({provider.vendor}) "
-                f"for processing. Data is transmitted outside your infrastructure. "
-                f"Vendor: {provider.vendor}."
-            ),
-        ))
-
-    # Embedding DB with cloud component
-    if provider and provider.category == "embedding_db" and "self-hosted" not in str(provider.data_residency).lower():
+    if (
+        provider is not None
+        and provider.category == "embedding_db"
+        and "self-hosted" not in str(provider.data_residency).lower()
+        and "local" not in str(provider.data_residency).lower()
+    ):
         reasons.append(RiskReason(
             severity="warning",
             title="Embeddings stored in external service",
             detail=(
-                f"Embeddings sent to {provider.display_name} may encode sensitive information "
-                "from your data. While not directly readable, embeddings can potentially be "
-                "reversed or used for inference attacks."
+                f"Embeddings sent to {provider.display_name} may encode sensitive "
+                "information from the source text. Embedding inversion attacks "
+                "can recover partial content — treat embedding stores like any "
+                "other data store holding the underlying source data."
+            ),
+        ))
+
+    # ── INFO — provider context ─────────────────────────────────────────
+
+    if provider is not None and provider.category == "llm_api":
+        residency = ", ".join(provider.data_residency) or "unknown"
+        reasons.append(RiskReason(
+            severity="info",
+            title=f"External AI API: {provider.display_name}",
+            detail=(
+                f"Data is processed by {provider.display_name} ({provider.vendor}). "
+                f"Residency: {residency}. Training policy: {provider.training_policy}"
             ),
         ))
 
@@ -637,28 +978,45 @@ def _build_risk_reasons(
         ))
 
     mcp_findings = [
-        f for f in asset.raw_findings
-        if f.provider == "mcp"
+        f for f in asset.raw_findings if f.provider == "mcp"
     ]
     if mcp_findings:
+        # Distinguish MCP *server* (this asset exposes tools) from MCP
+        # *client* (this asset just calls configured servers). Servers
+        # are higher risk because they bolt new capabilities onto the
+        # model; clients inherit the risk of whatever they connect to.
+        is_server = _asset_is_mcp_server(asset)
         server_names = sorted({
             f.content.replace("mcp server: ", "")
             for f in mcp_findings
             if f.content.startswith("mcp server:")
         })
-        detail = (
-            "Model Context Protocol server(s) give an LLM application privileged "
-            "access to local tools, filesystems or remote APIs. Each configured "
-            "server is a potential data-exfiltration vector and should be audited "
-            "individually."
-        )
-        if server_names:
-            detail += f" Configured servers: {', '.join(server_names)}."
-        reasons.append(RiskReason(
-            severity="warning",
-            title="MCP servers expose tool access to the model",
-            detail=detail,
-        ))
+        if is_server:
+            reasons.append(RiskReason(
+                severity="warning",
+                title="MCP server exposes tools to LLM clients",
+                detail=(
+                    "This asset IS an MCP server: it exposes local functions, "
+                    "filesystem access or remote API calls as LLM-callable "
+                    "tools. Every tool invocation is a potential data-exfil "
+                    "vector — audit the tool surface, limit filesystem and "
+                    "network scope, and log every call."
+                ),
+            ))
+        else:
+            detail = (
+                "This asset uses Model Context Protocol to call one or more "
+                "external MCP servers. The data sent to each server depends "
+                "on the server's implementation — review each server before "
+                "granting it access to production prompts."
+            )
+            if server_names:
+                detail += f" Configured servers: {', '.join(server_names)}."
+            reasons.append(RiskReason(
+                severity="info",
+                title="MCP client — consumes external tool servers",
+                detail=detail,
+            ))
 
     container_findings = [
         f for f in asset.raw_findings
@@ -675,6 +1033,14 @@ def _build_risk_reasons(
                 "requires you to patch the runtime, monitor resource use, and "
                 "secure the management endpoints."
             ),
+        ))
+
+    # Sprint 3 — dependency advisories (deprecated / vulnerable AI libs).
+    for advisory in find_advisories(list(asset.dependencies)):
+        reasons.append(RiskReason(
+            severity=advisory.severity,
+            title=advisory.title,
+            detail=advisory.detail,
         ))
 
     local_model_findings = [
@@ -1223,12 +1589,19 @@ def _derive_solution_display_name(asset: AIAsset, category: str) -> str:
     import re
 
     # ── 1. README title ──
+    _readme_noise_titles = {
+        "run", "usage", "install", "setup", "getting started", "example",
+        "examples", "todo", "readme", "notes", "overview", "quickstart",
+        "quick start", "demo", "run (runpod.io)", "run in colab",
+    }
     for ctx in asset.code_contexts:
         if ctx.language == "markdown" and ctx.raw_snippets:
             for line in ctx.raw_snippets[0].split("\n"):
                 line = line.strip()
                 if line.startswith("# "):
                     title = line[2:].strip()
+                    if title.lower().strip(":!") in _readme_noise_titles:
+                        break  # skip whole README title section
                     if _is_meaningful_name(title):
                         return title[:80]
 
@@ -1366,11 +1739,35 @@ def _is_generic_role(role: str) -> bool:
 
 
 def _calculate_risk_score(reasons: list[RiskReason]) -> float:
-    """Calculate a weighted risk score from risk reasons."""
-    if not reasons:
-        return 0.1
+    """Calculate a weighted risk score with explicit severity floors.
 
-    weights = {"critical": 0.4, "warning": 0.2, "info": 0.05}
-    score = sum(weights.get(r.severity, 0.0) for r in reasons)
+    Sprint 3 change — instead of summing fractional weights (which let
+    5 "info" lines add up to a warning-level score), we use explicit
+    floors keyed on severity plus a small additive contribution so
+    multiple issues of the same class still stack:
+
+      * any ``critical``  → score ≥ 0.70, +0.10 per extra critical
+      * any ``warning``   → score ≥ 0.40, +0.05 per extra warning
+      * only ``info``     → score ≤ 0.25, +0.02 per info
+      * nothing           → 0.10 (AI code with no audit signals)
+
+    This produces a cleaner bimodal-to-trimodal distribution: plain
+    inference assets sit in the 0.10-0.25 range ("OK"), assets that
+    need review land in 0.40-0.60 ("Warning"), and concrete incidents
+    start at 0.70 ("Critical").
+    """
+    if not reasons:
+        return 0.10
+
+    crit = sum(1 for r in reasons if r.severity == "critical")
+    warn = sum(1 for r in reasons if r.severity == "warning")
+    info = sum(1 for r in reasons if r.severity == "info")
+
+    if crit:
+        score = 0.70 + 0.10 * (crit - 1) + 0.03 * warn
+    elif warn:
+        score = 0.40 + 0.05 * (warn - 1) + 0.02 * info
+    else:
+        score = 0.10 + 0.02 * info
 
     return min(1.0, max(0.0, round(score, 2)))

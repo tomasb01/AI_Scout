@@ -417,6 +417,38 @@ def _get_call_args_preview(node: ast.Call) -> str:
     return ", ".join(parts)
 
 
+import re as _re
+
+_PROMPT_NOISE_RE = _re.compile(
+    r"^(?:[\s\-=>*#]*)?"               # optional leading markdown/arrow/bullet
+    r"(?:[^\w\s]{1,4}\s*)?"             # optional emoji cluster
+    r"(?:step\s*\d+|✅|✓|❌|✗|🔄|▶|>>>|<<<|\[info\]|\[debug\])",
+    _re.IGNORECASE,
+)
+
+
+def _looks_like_runtime_log(text: str) -> bool:
+    """Reject strings that look like console/print noise rather than prompts.
+
+    Real system prompts are descriptive English paragraphs. Print-statement
+    literals and tqdm-style progress lines often match the "contains 'please'
+    or 'analyze'" heuristic below but clearly aren't prompts — this filter
+    catches them so they don't end up in the asset summary.
+    """
+    if _PROMPT_NOISE_RE.match(text):
+        return True
+    # First non-space character is an emoji (very common in print() calls)
+    first = next((c for c in text if not c.isspace()), "")
+    if first and not first.isalnum() and ord(first) > 127:
+        return True
+    # Newline-heavy terse status lines like "Step 1: foo\nStep 2: bar"
+    if text.count("\n") == 0 and len(text) < 120 and ":" in text[:25]:
+        head = text.split(":", 1)[0].lower()
+        if head in ("step", "note", "warning", "error", "info", "debug"):
+            return True
+    return False
+
+
 def _extract_prompts_from_ast(tree: ast.Module, ctx: CodeContext):
     """Find prompt-like strings in AST."""
     for node in ast.walk(tree):
@@ -432,13 +464,13 @@ def _extract_prompts_from_ast(tree: ast.Module, ctx: CodeContext):
                 if any(kw in target_name for kw in ("prompt", "system", "instruction", "template")):
                     if isinstance(node.value, ast.Constant) and isinstance(node.value.value, str):
                         text = node.value.value.strip()
-                        if len(text) > 15:
+                        if len(text) > 15 and not _looks_like_runtime_log(text):
                             ctx.prompts.append(text[:500])
                     elif isinstance(node.value, ast.JoinedStr):
                         # f-string — unparse it
                         try:
                             text = ast.unparse(node.value)
-                            if len(text) > 15:
+                            if len(text) > 15 and not _looks_like_runtime_log(text):
                                 ctx.prompts.append(text[:500])
                         except Exception:
                             pass
@@ -451,7 +483,8 @@ def _extract_prompts_from_ast(tree: ast.Module, ctx: CodeContext):
                 "please", "analyze", "generate", "translate", "summarize",
                 "classify", "extract", "help",
             )):
-                ctx.prompts.append(text[:500])
+                if not _looks_like_runtime_log(text):
+                    ctx.prompts.append(text[:500])
 
 
 # ── Model name extraction ────────────────────────────────────────────────

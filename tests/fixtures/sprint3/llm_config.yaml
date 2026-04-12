@@ -1,0 +1,7 @@
+llm:
+  provider: azure
+  deployment_name: gpt-4o-prod-eu
+  azure_endpoint: https://fleurcorp.openai.azure.com
+  api_version: "2024-06-01"
+fallback_model: claude-3-5-sonnet-20241022
+ollama_model: llama3.1:8b
