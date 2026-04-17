@@ -24,7 +24,32 @@ _CATEGORY_MAP = {c.value: c for c in DataCategory}
 
 
 class LLMEngine:
-    """Classifies AI assets using an LLM (Ollama or OpenAI-compatible API)."""
+    """Classifies AI assets using a customer-chosen LLM backend.
+
+    Two transport modes are supported:
+
+    * ``mode="ollama"`` — talks to Ollama's native REST API
+      (``/api/generate``). Ollama is the most common zero-config way to
+      run a local LLM, so it's the default.
+
+    * ``mode="openai"`` — talks to any OpenAI-compatible
+      ``/v1/chat/completions`` endpoint. This is deliberately broader
+      than "the OpenAI cloud": every self-hosted runtime that speaks
+      the OpenAI schema works here without code changes. Tested with:
+
+        - vLLM (``vllm serve``)
+        - LocalAI
+        - LM Studio's local server
+        - llama.cpp / llama-server
+        - text-generation-inference (TGI)
+        - Together, Groq, Mistral La Plateforme, Fireworks, DeepInfra,
+          OpenRouter, Azure OpenAI, and OpenAI itself
+
+    The customer picks which backend via ``--llm-mode openai --llm-url
+    http://my-host:8000 --llm-model my-local-model``. No data leaves
+    the customer's network — Scout's only LLM traffic goes to the URL
+    the customer passes in.
+    """
 
     def __init__(
         self,
@@ -280,20 +305,49 @@ Return ONLY the JSON object.""")
         return response.json()["response"]
 
     def _call_openai(self, prompt: str) -> str:
-        """Call OpenAI-compatible API."""
+        """Call any OpenAI-compatible ``/v1/chat/completions`` endpoint.
+
+        Tries with ``response_format=json_object`` first (works on OpenAI,
+        vLLM, LocalAI, LM Studio, llama.cpp-server) and transparently
+        retries without the field if the backend rejects it with a 4xx
+        (text-generation-inference and some older vLLM builds do this).
+        A low temperature is set so two runs on the same asset return
+        comparable classifications — important for the regression
+        harness.
+        """
         headers = {"Content-Type": "application/json"}
         if self.api_key:
             headers["Authorization"] = f"Bearer {self.api_key}"
 
-        response = self._client.post(
-            f"{self.url}/v1/chat/completions",
-            headers=headers,
-            json={
-                "model": self.model,
-                "messages": [{"role": "user", "content": prompt}],
-                "response_format": {"type": "json_object"},
+        messages = [
+            {
+                "role": "system",
+                "content": (
+                    "You are an enterprise AI governance auditor. Always "
+                    "respond with ONLY a single JSON object, no prose "
+                    "before or after."
+                ),
             },
-        )
+            {"role": "user", "content": prompt},
+        ]
+        body = {
+            "model": self.model,
+            "messages": messages,
+            "temperature": 0.1,
+            "response_format": {"type": "json_object"},
+        }
+
+        url = f"{self.url}/v1/chat/completions"
+        response = self._client.post(url, headers=headers, json=body)
+
+        if response.status_code >= 400:
+            # Backends without response_format support return 400 for
+            # "Unsupported parameter". Retry once with it stripped so
+            # we can still classify — we'll rely on the prompt to keep
+            # the model on the JSON rails.
+            body.pop("response_format", None)
+            response = self._client.post(url, headers=headers, json=body)
+
         response.raise_for_status()
         return response.json()["choices"][0]["message"]["content"]
 

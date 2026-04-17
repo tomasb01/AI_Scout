@@ -64,14 +64,31 @@ def enrich_asset(asset: AIAsset) -> AssetInsight:
     if asset.data_classification and asset.data_classification.recommendations:
         recommendations = asset.data_classification.recommendations
 
+    # Sprint 4 — surface the LLM's own risk read as a visible risk reason
+    # so the asset's final score and the reasons list stay in sync. The
+    # LLM's score no longer silently overrides the rule-based score;
+    # instead, a high LLM verdict injects a warning-level reason that
+    # flows through the normal aggregator and shows up under "Risk
+    # reasons" in the report.
+    if asset.data_classification and asset.data_classification.risk_score >= 0.5:
+        llm_sev = "critical" if asset.data_classification.risk_score >= 0.8 else "warning"
+        llm_detail = (
+            asset.data_classification.details
+            or "LLM review flagged this asset as higher risk — review summary for context."
+        )
+        risk_reasons.append(RiskReason(
+            severity=llm_sev,
+            title="LLM review flagged elevated risk",
+            detail=llm_detail[:400],
+        ))
+
     category = _classify_category(asset)
     solution_name = _derive_solution_display_name(asset, category)
 
-    # Risk score: use LLM score if available, otherwise rule-based
-    if asset.data_classification and asset.data_classification.risk_score > 0:
-        asset.risk_score = max(asset.risk_score, asset.data_classification.risk_score)
-    else:
-        asset.risk_score = _calculate_risk_score(risk_reasons)
+    # Risk score: rule-based score from all reasons (including the
+    # optional synthetic LLM reason above). This keeps the displayed
+    # number consistent with the displayed reasons.
+    asset.risk_score = _calculate_risk_score(risk_reasons)
 
     return AssetInsight(
         summary=summary,
@@ -814,33 +831,129 @@ def _asset_processes_pii(asset: AIAsset) -> bool:
     return any(kw in text for kw in _PII_KEYWORDS)
 
 
+_MCP_SERVER_IMPORTS = (
+    "mcp.server", "mcp.server.fastmcp", "mcp.server.stdio",
+    "mcp.server.sse", "fastmcp",
+)
+_MCP_CLIENT_IMPORTS = (
+    "mcp.client", "mcp.client.stdio", "mcp.client.sse",
+    "mcp.client.streamable_http", "langchain_mcp_adapters",
+)
+_MCP_SERVER_CALLS = (
+    "fastmcp(", "server(", "mcp.server(", "mcp.server.fastmcp(",
+)
+_MCP_CLIENT_CALLS = (
+    "multiservermcpclient(", "stdio_client(", "sse_client(",
+    "streamablehttp_client(", "langchain_mcp_adapters.",
+)
+_MCP_SERVER_DECORATORS = ("@mcp.tool", "@server.tool", "@mcp.resource", "@app.tool")
+
+
 def _asset_is_mcp_server(asset: AIAsset) -> bool:
     """Distinguish MCP *server* (exposes tools) from MCP *client* (uses servers).
 
-    Servers import ``mcp.server`` or declare their entrypoint as an MCP
-    server via ``fastmcp`` / ``@server.tool`` decorators. Clients import
-    ``langchain_mcp_adapters`` / use ``MultiServerMCPClient`` etc.
+    Uses structured signals from ``code_contexts`` rather than substring
+    matching on a collected text blob — the old implementation flagged
+    any file whose prompt or path contained ``server`` as a marker,
+    producing false positives on LangGraph clients that merely called
+    Playwright MCP.
+
+    Signal sources (strongest → weakest):
+      1. An actual MCP-server import path (``from mcp.server import …``,
+         ``import fastmcp``) found on any function's imports or body preview.
+      2. An MCP-server decorator (``@mcp.tool()``, ``@server.tool()``)
+         on any function.
+      3. A constructor call to ``FastMCP(...)`` or ``Server(...)`` with
+         no corresponding client import.
+      4. An ``mcp.json`` config file is NOT enough on its own — a file
+         listing servers is a client's config.
     """
-    text = _collect_code_text(asset)
-    server_markers = (
-        "mcp.server", "fastmcp", "server.tool", "@server.", "mcp_server",
-        "stdio_server", "sse_server",
-    )
-    client_markers = (
-        "multiservermcpclient", "langchain_mcp_adapters",
-        "streamablehttp_client", "stdio_client", "sse_client",
-        "mcp.client",
-    )
-    has_server = any(m in text for m in server_markers)
-    has_client = any(m in text for m in client_markers)
-    if has_server and not has_client:
+    server_import_hits = 0
+    client_import_hits = 0
+    server_decorator_hits = 0
+
+    # 1) Check IMPORT_DETECTED findings first — the scanner already
+    #    captured the exact import line (e.g. "from mcp.server.lowlevel
+    #    import Server"), which is the most reliable classification
+    #    signal. Assets whose only file is pyproject.toml rely on this
+    #    because the code_analyzer won't produce code_contexts for them.
+    for f in asset.raw_findings:
+        if f.type != FindingType.IMPORT_DETECTED or f.provider != "mcp":
+            continue
+        low = (f.content or "").lower()
+        if any(f"from {imp}" in low or f"import {imp}" in low
+               for imp in _MCP_SERVER_IMPORTS):
+            server_import_hits += 1
+        if any(f"from {imp}" in low or f"import {imp}" in low
+               for imp in _MCP_CLIENT_IMPORTS):
+            client_import_hits += 1
+
+    # 2) Check code_contexts for decorators + body imports + API calls.
+    for ctx in asset.code_contexts:
+        sources: list[str] = []
+        for func in ctx.functions:
+            sources.append(func.get("body_preview") or "")
+            sources.extend(func.get("decorators") or [])
+        sources.extend(ctx.raw_snippets or [])
+
+        for src in sources:
+            low = src.lower()
+            if any(f"from {imp}" in low or f"import {imp}" in low
+                   for imp in _MCP_SERVER_IMPORTS):
+                server_import_hits += 1
+            if any(f"from {imp}" in low or f"import {imp}" in low
+                   for imp in _MCP_CLIENT_IMPORTS):
+                client_import_hits += 1
+            if any(deco in low for deco in _MCP_SERVER_DECORATORS):
+                server_decorator_hits += 1
+
+        for call in ctx.api_calls:
+            target = (call.get("target") or "").lower()
+            args = (call.get("args_preview") or "").lower()
+            blob = f"{target}({args})"
+            if any(sig in blob for sig in _MCP_SERVER_CALLS):
+                server_import_hits += 1
+            if any(sig in blob for sig in _MCP_CLIENT_CALLS):
+                client_import_hits += 1
+
+    # Explicit server signals dominate — a codebase with decorators or
+    # fastmcp imports is a server even if it *also* happens to embed a
+    # client SDK (rare but legal).
+    if server_decorator_hits > 0:
         return True
-    # If only a config file was found (mcp.json with server list), the
-    # asset is a client that *configures* servers.
-    if any(f.type == FindingType.CONFIG_DETECTED and f.provider == "mcp"
-           for f in asset.raw_findings) and not has_server:
+    if server_import_hits > 0 and client_import_hits == 0:
+        return True
+    if client_import_hits > 0:
         return False
-    return has_server
+
+    # Fallback: a pure mcp.json config with no Python code is a client
+    # configuration, not a server.
+    if any(
+        f.type == FindingType.CONFIG_DETECTED and f.provider == "mcp"
+        for f in asset.raw_findings
+    ):
+        return False
+
+    # Path-based tie-breaker: some MCP servers only import ``mcp.types``
+    # (shared between client/server SDK) and our structured signals
+    # can't decide. If the asset has any MCP finding and at least one
+    # of its files is literally named ``server.py`` or lives under a
+    # ``/servers/`` directory, we treat it as a server. Browser agents
+    # and LangGraph clients don't ship files with those names, so the
+    # Sprint 2 false-positive regression doesn't come back.
+    has_any_mcp = any(f.provider == "mcp" for f in asset.raw_findings)
+    if has_any_mcp:
+        file_paths = asset.file_path.split(", ") if asset.file_path else []
+        for path in file_paths:
+            low = path.lower()
+            if low.endswith("/server.py") or low == "server.py":
+                return True
+            if "/servers/" in low:
+                return True
+
+    # Nothing conclusive — default to False (client) since spurious
+    # "MCP server exposes tools" warnings were the documented regression.
+    return False
 
 
 def _build_risk_reasons(

@@ -273,6 +273,82 @@ def test_mcp_server_vs_client_severity():
     )
 
 
+def test_mcp_server_detected_from_import_finding_only():
+    """Sprint 4 regression: a Server asset whose only evidence is an
+    import_detected finding (because code_analyzer produced no contexts
+    for pyproject.toml) must still classify as MCP server, not client."""
+    from aiscout.engine.enrichment import _asset_is_mcp_server
+    asset = _make_asset("mcp", findings=[
+        Finding(
+            type=FindingType.IMPORT_DETECTED,
+            file_path="server.py",
+            line_number=1,
+            content="from mcp.server.lowlevel import Server",
+            provider="mcp",
+        ),
+        Finding(
+            type=FindingType.DEPENDENCY_DETECTED,
+            file_path="pyproject.toml",
+            content="mcp>=1.9.4",
+            provider="mcp",
+        ),
+    ])
+    asset.code_contexts = []
+    assert _asset_is_mcp_server(asset)
+
+
+def test_mcp_server_path_tiebreaker():
+    """Sprint 4 S4.4: a server.py file that only imports ``mcp.types``
+    (shared between client and server SDK) must still classify as a
+    server when its path structure clearly says so."""
+    from aiscout.engine.enrichment import _asset_is_mcp_server
+    from aiscout.models import CodeContext
+    asset = _make_asset("mcp")
+    asset.file_path = "examples/servers/simple/simple/server.py"
+    asset.code_contexts = [CodeContext(
+        file_path="examples/servers/simple/simple/server.py",
+        language="python",
+        functions=[{
+            "name": "main",
+            "body_preview": "import mcp.types as types\napp = ...",
+        }],
+    )]
+    asset.raw_findings = [Finding(
+        type=FindingType.IMPORT_DETECTED,
+        file_path="examples/servers/simple/simple/server.py",
+        content="import mcp.types as types",
+        provider="mcp",
+    )]
+    assert _asset_is_mcp_server(asset)
+
+
+def test_mcp_client_not_misclassified_as_server():
+    """Sprint 4 regression: Browser agent that uses langchain_mcp_adapters
+    to consume an MCP server must NOT be classified as server."""
+    from aiscout.engine.enrichment import _asset_is_mcp_server
+    from aiscout.models import CodeContext
+    asset = _make_asset("langchain")
+    asset.code_contexts = [CodeContext(
+        file_path="graph.py",
+        language="python",
+        functions=[{
+            "name": "create_graph",
+            "body_preview": (
+                "from langchain_mcp_adapters.client import "
+                "MultiServerMCPClient\nclient = MultiServerMCPClient({...})"
+            ),
+        }],
+    )]
+    asset.raw_findings.append(Finding(
+        type=FindingType.IMPORT_DETECTED,
+        file_path="graph.py",
+        line_number=1,
+        content="from langchain_mcp_adapters.client import MultiServerMCPClient",
+        provider="mcp",
+    ))
+    assert not _asset_is_mcp_server(asset)
+
+
 def test_risk_score_floors_match_severity():
     from aiscout.engine.enrichment import _calculate_risk_score, RiskReason
     assert _calculate_risk_score([RiskReason("critical", "t", "d")]) >= 0.70

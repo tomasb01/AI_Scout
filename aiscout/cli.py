@@ -39,15 +39,26 @@ def cli():
 @click.option("--token", "-t", envvar="AISCOUT_GIT_TOKEN", help="Git access token")
 @click.option("--branch", "-b", default="main", help="Default branch to scan")
 @click.option("--output", "-o", default="aiscout_report.html", help="Output path (.html or .json)")
-@click.option("--llm-url", default="http://localhost:11434", help="LLM API URL")
-@click.option("--llm-model", default="qwen2.5-coder:7b", help="LLM model name")
+@click.option(
+    "--llm-url",
+    default="http://localhost:11434",
+    help="LLM backend URL (Ollama default; any OpenAI-compatible host "
+         "for --llm-mode openai, e.g. http://vllm:8000)",
+)
+@click.option("--llm-model", default="qwen2.5-coder:7b", help="LLM model name / deployment id")
 @click.option(
     "--llm-mode",
     type=click.Choice(["ollama", "openai"]),
     default="ollama",
-    help="LLM backend mode",
+    help="LLM transport. 'ollama' = native Ollama REST API. "
+         "'openai' = any OpenAI-compatible /v1/chat/completions endpoint "
+         "(vLLM, LocalAI, LM Studio, llama.cpp, TGI, Together, Groq, …)",
 )
-@click.option("--llm-key", envvar="AISCOUT_LLM_KEY", help="LLM API key (OpenAI mode)")
+@click.option(
+    "--llm-key",
+    envvar="AISCOUT_LLM_KEY",
+    help="Bearer token for OpenAI-compatible backends that require auth",
+)
 @click.option("--no-llm", is_flag=True, help="Skip LLM classification")
 def scan(
     repo, local, config, token, branch, output,

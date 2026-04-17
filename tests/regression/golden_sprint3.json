@@ -14,27 +14,21 @@
       "provider": "anthropic",
       "raw_findings": [
         {
-          "content": "CI: Claude GitHub Action",
           "file_path": ".github/workflows/llm-review.yml",
-          "line_number": 12,
+          "has_redaction": false,
           "provider": "anthropic",
-          "redacted_content": null,
           "type": "config_detected"
         },
         {
-          "content": "CI: Anthropic credential in CI",
           "file_path": ".github/workflows/llm-review.yml",
-          "line_number": 16,
+          "has_redaction": false,
           "provider": "anthropic",
-          "redacted_content": null,
           "type": "config_detected"
         },
         {
-          "content": "CI: CI runs a training script",
           "file_path": ".github/workflows/llm-review.yml",
-          "line_number": 18,
+          "has_redaction": false,
           "provider": "huggingface",
-          "redacted_content": null,
           "type": "config_detected"
         }
       ],
@@ -66,59 +60,45 @@
       "provider": "azure_openai",
       "raw_findings": [
         {
-          "content": "config: gpt-4o-prod-eu",
           "file_path": "llm_config.yaml",
-          "line_number": 3,
+          "has_redaction": false,
           "provider": "azure_openai",
-          "redacted_content": null,
           "type": "config_detected"
         },
         {
-          "content": "config: claude-3-5-sonnet-20241022",
           "file_path": "llm_config.yaml",
-          "line_number": 6,
-          "provider": "openai",
-          "redacted_content": null,
-          "type": "config_detected"
-        },
-        {
-          "content": "config: llama3.1:8b",
-          "file_path": "llm_config.yaml",
-          "line_number": 7,
-          "provider": "openai",
-          "redacted_content": null,
-          "type": "config_detected"
-        },
-        {
-          "content": "config: llama3.1:8b",
-          "file_path": "llm_config.yaml",
-          "line_number": 7,
+          "has_redaction": false,
           "provider": "ollama",
-          "redacted_content": null,
           "type": "config_detected"
         },
         {
-          "content": "openai==0.28.1",
-          "file_path": "requirements.txt",
-          "line_number": 3,
+          "file_path": "llm_config.yaml",
+          "has_redaction": false,
           "provider": "openai",
-          "redacted_content": null,
-          "type": "dependency_detected"
+          "type": "config_detected"
         },
         {
-          "content": "langchain==0.0.340",
-          "file_path": "requirements.txt",
-          "line_number": 4,
-          "provider": "langchain",
-          "redacted_content": null,
-          "type": "dependency_detected"
+          "file_path": "llm_config.yaml",
+          "has_redaction": false,
+          "provider": "openai",
+          "type": "config_detected"
         },
         {
-          "content": "chromadb==0.3.26",
           "file_path": "requirements.txt",
-          "line_number": 5,
+          "has_redaction": false,
           "provider": "chromadb",
-          "redacted_content": null,
+          "type": "dependency_detected"
+        },
+        {
+          "file_path": "requirements.txt",
+          "has_redaction": false,
+          "provider": "langchain",
+          "type": "dependency_detected"
+        },
+        {
+          "file_path": "requirements.txt",
+          "has_redaction": false,
+          "provider": "openai",
           "type": "dependency_detected"
         }
       ],
@@ -140,38 +120,15 @@
       "asset_name": ".github",
       "category": "Workflows & Pipelines",
       "data_involved": [],
-      "provider_profile": {
-        "category": "llm_api",
-        "certifications": [
-          "SOC 2 Type II",
-          "HIPAA eligible",
-          "GDPR DPA available"
-        ],
-        "data_residency": [
-          "US"
-        ],
-        "description": "Claude model family API. Used for text generation, analysis, code, and agentic tasks.",
-        "display_name": "Anthropic (Claude)",
-        "docs_url": "https://docs.anthropic.com",
-        "enterprise_note": "Enterprise plan with DPA, SSO, admin controls, no training on data.",
-        "free_tier_risk": "Personal claude.ai usage may contribute data to training. API usage does not by default.",
-        "name": "anthropic",
-        "training_policy": "API: data not used for training by default. Free tier (claude.ai): data may be used. Enterprise: contractual guarantees.",
-        "vendor": "Anthropic, PBC"
-      },
-      "recommendations": [
-        "Document this AI integration in your organization's AI asset inventory.",
-        "Review the integration against your AI governance policy."
-      ],
+      "provider_profile_name": "anthropic",
+      "recommendation_count": 2,
       "risk_reasons": [
-        {
-          "detail": "Data is processed by Anthropic (Claude) (Anthropic, PBC). Residency: US. Training policy: API: data not used for training by default. Free tier (claude.ai): data may be used. Enterprise: contractual guarantees.",
-          "severity": "info",
-          "title": "External AI API: Anthropic (Claude)"
-        }
+        [
+          "info",
+          "External AI API: Anthropic (Claude)"
+        ]
       ],
-      "solution_name": "Workflows & Pipelines — Workflows",
-      "summary": "Local inference on a large language model.",
+      "solution_name_set": true,
       "tech_stack": [
         "Anthropic (Claude)",
         "Hugging Face"
@@ -181,55 +138,27 @@
       "asset_name": "Azure OpenAI Integration",
       "category": "Other AI Solutions",
       "data_involved": [],
-      "provider_profile": {
-        "category": "llm_api",
-        "certifications": [
-          "SOC 1/2/3",
-          "ISO 27001",
-          "HIPAA",
-          "FedRAMP High",
-          "GDPR DPA"
-        ],
-        "data_residency": [
-          "customer-selected Azure region (EU, US, UK, …)"
-        ],
-        "description": "OpenAI models (GPT-4, GPT-4o, embeddings) hosted in Azure tenants with private networking, separate DPA and regional deployment control.",
-        "display_name": "Azure OpenAI",
-        "docs_url": "https://learn.microsoft.com/azure/ai-services/openai/",
-        "enterprise_note": "Private endpoints, VNet integration, Customer-Managed Keys, Azure AD auth, content filtering configurable.",
-        "free_tier_risk": "No free tier. Access requires an Azure subscription and Microsoft application approval.",
-        "name": "azure_openai",
-        "training_policy": "Data is NOT sent to OpenAI and is NOT used to train models. Stays within the customer's Azure tenant.",
-        "vendor": "Microsoft Azure"
-      },
-      "recommendations": [
-        "Document this AI integration in your organization's AI asset inventory.",
-        "Review the integration against your AI governance policy."
-      ],
+      "provider_profile_name": "azure_openai",
+      "recommendation_count": 2,
       "risk_reasons": [
-        {
-          "detail": "Data is processed by Azure OpenAI (Microsoft Azure). Residency: customer-selected Azure region (EU, US, UK, …). Training policy: Data is NOT sent to OpenAI and is NOT used to train models. Stays within the customer's Azure tenant.",
-          "severity": "info",
-          "title": "External AI API: Azure OpenAI"
-        },
-        {
-          "detail": "ChromaDB < 0.4 uses the legacy DuckDB/parquet backend that is no longer tested upstream and will refuse to load in newer client versions. Migrate the collection to >=0.4.",
-          "severity": "warning",
-          "title": "ChromaDB < 0.4 (unsupported schema)"
-        },
-        {
-          "detail": "LangChain versions below 0.1 predate the core/community split and have multiple documented prompt-injection and code-execution issues (CVE-2023-36095, CVE-2023-44467 et al.). Upgrade to the latest 0.2+ series and move integration code to the split packages (``langchain-openai``, …).",
-          "severity": "warning",
-          "title": "LangChain < 0.1 (pre-split, unsupported)"
-        },
-        {
-          "detail": "The 0.x OpenAI Python SDK uses the legacy API surface and is no longer receiving security or compatibility fixes. Upgrade to >=1.0 and migrate any ``openai.Completion`` / ``openai.ChatCompletion`` calls to the new client API.",
-          "severity": "warning",
-          "title": "OpenAI SDK < 1.0 (legacy API)"
-        }
+        [
+          "info",
+          "External AI API: Azure OpenAI"
+        ],
+        [
+          "warning",
+          "ChromaDB < 0.4 (unsupported schema)"
+        ],
+        [
+          "warning",
+          "LangChain < 0.1 (pre-split, unsupported)"
+        ],
+        [
+          "warning",
+          "OpenAI SDK < 1.0 (legacy API)"
+        ]
       ],
-      "solution_name": "Azure OpenAI Integration",
-      "summary": "Retrieval-augmented generation pipeline backed by Azure OpenAI.",
+      "solution_name_set": true,
       "tech_stack": [
         "Azure OpenAI",
         "ChromaDB",

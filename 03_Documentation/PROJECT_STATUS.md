@@ -1,6 +1,8 @@
 # AI Scout — Project Status & Documentation
 
-**Last updated: April 11, 2026 | Version: 0.6.0**
+**Last updated: April 17, 2026 | Version: 0.6.0 + Sprinty 1–4**
+
+> Detailní log čtyř bezpečnostních a kvalitativních sprintů (12.–15. 4. 2026): viz **[SPRINT_LOG.md](SPRINT_LOG.md)** (107 testů, risk rework, LLM e2e, MCP server/client, CI/CD scanner, dep advisories).
 
 ---
 
@@ -221,7 +223,7 @@ AI_Scout/
 ├── landing/
 │   ├── index.html                    # Sales landing page
 │   └── screenshots/                  # Demo screenshots
-├── tests/                            # 51 tests
+├── tests/                            # 107 tests (Sprinty 1–4)
 ├── Dockerfile                        # Docker deployment
 ├── docker-compose.yml
 ├── pyproject.toml

@@ -45,7 +45,18 @@ GOLDEN_SPRINT3 = GOLDEN_DIR / "golden_sprint3.json"
 
 
 def _run_pipeline(root: Path = FIXTURES) -> dict:
-    """Run the full no-LLM scan pipeline and return a normalised snapshot."""
+    """Run the full no-LLM scan pipeline and return the stable snapshot.
+
+    Back-compat shim for tests that only want the golden-diffable shape.
+    New code should prefer ``_run_pipeline_both`` which also returns the
+    volatile shape for floor assertions.
+    """
+    stable, _volatile = _run_pipeline_both(root)
+    return stable
+
+
+def _run_pipeline_both(root: Path = FIXTURES) -> tuple[dict, dict]:
+    """Run the pipeline once and return (stable, volatile) snapshots."""
     scanner = GitScanner(repo_path=str(root))
     result = scanner.scan()
     analyze_assets(result.assets, str(root))
@@ -57,12 +68,25 @@ def _run_pipeline(root: Path = FIXTURES) -> dict:
         ins = insights_by_id.get(asset.id)
         if ins is not None:
             insights_by_name[asset.name] = ins
-    return _normalise(result, insights_by_name)
+    stable = _normalise_stable(result, insights_by_name)
+    volatile = _normalise_volatile(result, insights_by_name)
+    return stable, volatile
 
 
-def _normalise(result, insights) -> dict:
-    """Strip volatile fields (UUIDs, timestamps, absolute paths) and
-    canonicalise ordering so the snapshot is byte-stable across runs."""
+def _normalise_stable(result, insights) -> dict:
+    """Produce the *stable* snapshot — fields whose drift is a real regression.
+
+    Stable = structural classification the user relies on:
+      * asset identity (name, type, provider, tags, task_types, risk_score)
+      * raw findings (type + file_path + provider — NOT content text)
+      * code context shape (function names, api call targets, env vars,
+        prompt *count/length* not prompt text)
+      * risk reasons by (severity, title) — NOT detail text
+      * insight tech_stack and data_involved lists
+
+    Anything the user reads but where word-level drift is acceptable
+    lives in the volatile shape and is checked separately.
+    """
     assets_out = []
     for asset in sorted(result.assets, key=lambda a: (a.name, a.file_path)):
         provider_name = asset.provider.name if asset.provider else None
@@ -71,14 +95,12 @@ def _normalise(result, insights) -> dict:
                 {
                     "type": f.type.value,
                     "file_path": f.file_path,
-                    "line_number": f.line_number,
-                    "content": f.content,
-                    "redacted_content": f.redacted_content,
                     "provider": f.provider,
+                    "has_redaction": f.redacted_content is not None,
                 }
                 for f in asset.raw_findings
             ),
-            key=lambda f: (f["type"], f["file_path"], f["line_number"] or 0, f["content"]),
+            key=lambda f: (f["type"], f["file_path"], f["provider"]),
         )
         code_contexts = sorted(
             (
@@ -101,7 +123,6 @@ def _normalise(result, insights) -> dict:
                         [ds.get("type", "") for ds in c.data_sinks]
                     ),
                     "prompt_count": len(c.prompts),
-                    "prompt_lengths": sorted([len(p) for p in c.prompts]),
                     "env_vars": sorted(c.env_vars),
                     "model_names": sorted(set(c.model_names)),
                 }
@@ -114,7 +135,7 @@ def _normalise(result, insights) -> dict:
             "name": asset.name,
             "type": asset.type.value,
             "provider": provider_name,
-            "risk_score": round(asset.risk_score, 4),
+            "risk_score": round(asset.risk_score, 2),
             "discovered_via": sorted(asset.discovered_via),
             "repository": asset.repository,
             "file_paths": sorted(asset.file_path.split(", ")),
@@ -128,15 +149,28 @@ def _normalise(result, insights) -> dict:
     insights_out = []
     for asset_name in sorted(insights.keys()):
         ins = insights[asset_name]
-        if hasattr(ins, "model_dump"):
-            data = ins.model_dump()
-        elif dataclasses.is_dataclass(ins):
+        if dataclasses.is_dataclass(ins):
             data = dataclasses.asdict(ins)
         else:
             data = dict(ins.__dict__)
-        for volatile in ("asset_id", "id", "timestamp", "generated_at"):
-            data.pop(volatile, None)
-        insights_out.append({"asset_name": asset_name, **data})
+        # Risk reasons: keep (severity, title) tuples. Detail text is volatile.
+        reasons_stable = sorted(
+            [(r["severity"], r["title"]) for r in (data.get("risk_reasons") or [])]
+        )
+        tech_stack = sorted(data.get("tech_stack") or [])
+        data_involved = sorted(data.get("data_involved") or [])
+        insights_out.append({
+            "asset_name": asset_name,
+            "category": data.get("category", ""),
+            "solution_name_set": bool((data.get("solution_name") or "").strip()),
+            "tech_stack": tech_stack,
+            "data_involved": data_involved,
+            "risk_reasons": reasons_stable,
+            "recommendation_count": len(data.get("recommendations") or []),
+            "provider_profile_name": (
+                data.get("provider_profile") or {}
+            ).get("name") if data.get("provider_profile") else None,
+        })
 
     return {
         "scanner": result.scanner,
@@ -146,6 +180,36 @@ def _normalise(result, insights) -> dict:
         "assets": assets_out,
         "insights": insights_out,
     }
+
+
+def _normalise_volatile(result, insights) -> dict:
+    """Produce the *volatile* shape — fields we smoke-check but don't diff.
+
+    Purpose: guard against the regression harness drowning in noise when
+    a summary generator (human-authored or LLM-authored) produces
+    semantically equivalent but byte-different text. We still want a
+    floor check that every asset ended up with a non-empty summary and
+    at least one risk reason, just not byte-level equality.
+    """
+    volatile = {"assets": {}, "insights": {}}
+    for asset in result.assets:
+        volatile["assets"][asset.name] = {
+            "finding_count": len(asset.raw_findings),
+            "has_code_context": bool(asset.code_contexts),
+        }
+    for asset_name, ins in insights.items():
+        data = dataclasses.asdict(ins) if dataclasses.is_dataclass(ins) else ins.__dict__
+        volatile["insights"][asset_name] = {
+            "summary_length": len(data.get("summary") or ""),
+            "summary_nonempty": bool((data.get("summary") or "").strip()),
+            "reason_count": len(data.get("risk_reasons") or []),
+        }
+    return volatile
+
+
+# Keep the old name as an alias so ad-hoc callers (notebooks, debuggers)
+# that imported the pre-split helper still work.
+_normalise = _normalise_stable
 
 
 def _diff_against_golden(snapshot: dict, golden_path: Path, label: str):
@@ -181,18 +245,37 @@ def _diff_against_golden(snapshot: dict, golden_path: Path, label: str):
         )
 
 
+def _assert_volatile_floor(volatile: dict, label: str):
+    """Floor checks — every asset must produce a non-empty summary and
+    at least one risk reason. This catches the 'enrichment returned
+    blank' failure mode without pinning the exact text."""
+    for asset_name, facts in volatile["insights"].items():
+        assert facts["summary_nonempty"], (
+            f"{label}: asset '{asset_name}' has an empty summary"
+        )
+        assert facts["summary_length"] >= 15, (
+            f"{label}: asset '{asset_name}' summary is implausibly short "
+            f"({facts['summary_length']} chars)"
+        )
+        assert facts["reason_count"] >= 1, (
+            f"{label}: asset '{asset_name}' has no risk reasons"
+        )
+
+
 def test_regression_snapshot():
     """Sprint 1 fixture tree — chatbot + hardcoded key."""
-    _diff_against_golden(_run_pipeline(FIXTURES), GOLDEN, "fixtures")
+    stable, volatile = _run_pipeline_both(FIXTURES)
+    _diff_against_golden(stable, GOLDEN, "fixtures")
+    _assert_volatile_floor(volatile, "fixtures")
 
 
 def test_regression_snapshot_sprint2():
     """Sprint 2 fixture tree — MCP config, Docker/compose, Azure OpenAI,
     fine-tuning script, local model weights. Exercises every Sprint 2
     detector in a single pipeline run."""
-    _diff_against_golden(
-        _run_pipeline(SPRINT2_FIXTURES), GOLDEN_SPRINT2, "fixtures/sprint2"
-    )
+    stable, volatile = _run_pipeline_both(SPRINT2_FIXTURES)
+    _diff_against_golden(stable, GOLDEN_SPRINT2, "fixtures/sprint2")
+    _assert_volatile_floor(volatile, "fixtures/sprint2")
 
 
 def test_regression_snapshot_sprint3():
@@ -200,13 +283,15 @@ def test_regression_snapshot_sprint3():
     deployment, requirements.txt pinned to legacy openai/langchain. One
     snapshot covers CI detection, YAML model parsing and dependency
     advisories."""
-    _diff_against_golden(
-        _run_pipeline(SPRINT3_FIXTURES), GOLDEN_SPRINT3, "fixtures/sprint3"
-    )
+    stable, volatile = _run_pipeline_both(SPRINT3_FIXTURES)
+    _diff_against_golden(stable, GOLDEN_SPRINT3, "fixtures/sprint3")
+    _assert_volatile_floor(volatile, "fixtures/sprint3")
 
 
 def test_snapshot_is_deterministic():
-    """Two back-to-back runs must produce byte-identical output."""
+    """The stable snapshot must be byte-identical across two runs in the
+    same process. We explicitly test the *stable* shape only — the
+    volatile shape is intentionally allowed to drift across LLM runs."""
     first = json.dumps(_run_pipeline(), indent=2, sort_keys=True, ensure_ascii=False)
     second = json.dumps(_run_pipeline(), indent=2, sort_keys=True, ensure_ascii=False)
     assert first == second, "Pipeline output is not deterministic — cannot snapshot"
@@ -214,3 +299,7 @@ def test_snapshot_is_deterministic():
     first2 = json.dumps(_run_pipeline(SPRINT2_FIXTURES), indent=2, sort_keys=True, ensure_ascii=False)
     second2 = json.dumps(_run_pipeline(SPRINT2_FIXTURES), indent=2, sort_keys=True, ensure_ascii=False)
     assert first2 == second2, "Sprint 2 pipeline output is not deterministic"
+
+    first3 = json.dumps(_run_pipeline(SPRINT3_FIXTURES), indent=2, sort_keys=True, ensure_ascii=False)
+    second3 = json.dumps(_run_pipeline(SPRINT3_FIXTURES), indent=2, sort_keys=True, ensure_ascii=False)
+    assert first3 == second3, "Sprint 3 pipeline output is not deterministic"

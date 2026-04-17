@@ -71,6 +71,36 @@ def test_classify_openai(httpx_mock):
     assert result.risk_score == 0.5
 
 
+def test_classify_openai_vllm_url(httpx_mock):
+    """vLLM exposes the exact same /v1/chat/completions path on a
+    different host/port. Scout should work identically."""
+    httpx_mock.add_response(
+        url="http://vllm:8000/v1/chat/completions",
+        json={"choices": [{"message": {"content": VALID_LLM_RESPONSE}}]},
+    )
+    engine = LLMEngine(mode="openai", url="http://vllm:8000")
+    result = engine.classify(_make_asset())
+    assert result.confidence == Confidence.MEDIUM
+
+
+def test_classify_openai_retries_without_response_format(httpx_mock):
+    """Sprint 4 compat fix: when a backend (e.g. TGI) returns 400
+    because it doesn't understand response_format, Scout retries once
+    without it instead of bubbling the error."""
+    httpx_mock.add_response(
+        url="http://tgi:8080/v1/chat/completions",
+        status_code=400,
+        json={"error": "Unsupported parameter: response_format"},
+    )
+    httpx_mock.add_response(
+        url="http://tgi:8080/v1/chat/completions",
+        json={"choices": [{"message": {"content": VALID_LLM_RESPONSE}}]},
+    )
+    engine = LLMEngine(mode="openai", url="http://tgi:8080")
+    result = engine.classify(_make_asset())
+    assert result.risk_score == 0.5
+
+
 def test_classify_parse_failure(httpx_mock):
     httpx_mock.add_response(
         url="http://localhost:11434/api/generate",
