@@ -100,6 +100,43 @@ class Finding(BaseModel):
     provider: str = ""
 
 
+# ── Data Flow models (Sprint 5) ───────────────────────────────────────────
+
+
+class FlowSource(BaseModel):
+    """Where data enters the AI solution."""
+
+    type: str = ""  # database, file, api, user_input, env_var, message_queue
+    name: str = ""  # human-readable: "Chat message", "Customer DB"
+    detail: str = ""  # technical: "POST /chat — request.json['message']"
+
+
+class FlowSink(BaseModel):
+    """Where data leaves the AI solution."""
+
+    type: str = ""  # ai_api, database, file, http_response, webhook, log
+    name: str = ""  # human-readable: "Anthropic Claude API", "results.json"
+    detail: str = ""  # technical: "claude-sonnet-4-20250514 via messages.create()"
+    provider: str = ""  # "anthropic", "openai", "" for non-AI
+
+
+class DataFlowMap(BaseModel):
+    """Structured data flow for one AI solution — the core value entity.
+
+    Built by ``engine/data_flow.py`` from CodeContext data (no LLM
+    required). LLM enrichment can later refine ``solution_purpose``
+    and ``data_categories`` but the structural flow (sources → steps →
+    sinks) is constructed purely from code analysis.
+    """
+
+    solution_purpose: str = ""
+    sources: list[FlowSource] = []
+    sinks: list[FlowSink] = []
+    processing_steps: list[str] = []
+    data_categories: list[str] = []
+    confidence: Confidence = Confidence.MEDIUM
+
+
 # ── Code analysis models ───────────────────────────────────────────────────
 
 
@@ -141,8 +178,9 @@ class AIAsset(BaseModel):
     dependencies: list[str] = []
     raw_findings: list[Finding] = []
     code_contexts: list[CodeContext] = []
-    task_types: list[TaskType] = []  # Sprint 2 — training vs inference etc.
-    tags: list[str] = []  # Sprint 2 — chatbot/rag/agent/training/…
+    data_flow: DataFlowMap | None = None  # Sprint 5
+    task_types: list[TaskType] = []
+    tags: list[str] = []
 
 
 class ScannerConfig(BaseModel):

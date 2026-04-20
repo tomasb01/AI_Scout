@@ -378,7 +378,7 @@ PROVIDERS: dict[str, ProviderProfile] = {
     ),
     "mcp": ProviderProfile(
         name="mcp",
-        display_name="Model Context Protocol",
+        display_name="MCP",
         category="framework",
         description="Open protocol for connecting LLM applications to external tools, data sources and capabilities. MCP servers expose tools to Claude Desktop, IDE agents and custom clients.",
         vendor="Anthropic (open protocol)",

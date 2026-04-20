@@ -32,6 +32,7 @@ from pathlib import Path
 import pytest
 
 from aiscout.engine.code_analyzer import analyze_assets
+from aiscout.engine.data_flow import build_data_flows
 from aiscout.engine.enrichment import enrich_assets
 from aiscout.scanners.git_scanner import GitScanner
 
@@ -60,6 +61,7 @@ def _run_pipeline_both(root: Path = FIXTURES) -> tuple[dict, dict]:
     scanner = GitScanner(repo_path=str(root))
     result = scanner.scan()
     analyze_assets(result.assets, str(root))
+    build_data_flows(result.assets)
     insights_by_id = enrich_assets(result.assets)
     # Re-key insights from volatile asset UUID → stable asset name so the
     # snapshot diff isn't dominated by UUID churn.
@@ -131,6 +133,22 @@ def _normalise_stable(result, insights) -> dict:
             key=lambda c: c["file_path"],
         )
 
+        # DataFlowMap stable shape — structural, not text
+        flow_stable = None
+        if asset.data_flow:
+            flow_stable = {
+                "source_count": len(asset.data_flow.sources),
+                "source_types": sorted(s.type for s in asset.data_flow.sources),
+                "sink_count": len(asset.data_flow.sinks),
+                "sink_types": sorted(s.type for s in asset.data_flow.sinks),
+                "sink_providers": sorted(
+                    s.provider for s in asset.data_flow.sinks if s.provider
+                ),
+                "step_count": len(asset.data_flow.processing_steps),
+                "data_categories": sorted(asset.data_flow.data_categories),
+                "confidence": asset.data_flow.confidence.value,
+            }
+
         assets_out.append({
             "name": asset.name,
             "type": asset.type.value,
@@ -142,6 +160,7 @@ def _normalise_stable(result, insights) -> dict:
             "dependencies": sorted(asset.dependencies),
             "tags": sorted(asset.tags),
             "task_types": sorted(t.value for t in asset.task_types),
+            "data_flow": flow_stable,
             "raw_findings": raw_findings,
             "code_contexts": code_contexts,
         })

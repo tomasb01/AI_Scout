@@ -3,6 +3,16 @@
   "assets": [
     {
       "code_contexts": [],
+      "data_flow": {
+        "confidence": "low",
+        "data_categories": [],
+        "sink_count": 0,
+        "sink_providers": [],
+        "sink_types": [],
+        "source_count": 0,
+        "source_types": [],
+        "step_count": 0
+      },
       "dependencies": [],
       "discovered_via": [
         "git_scanner"
@@ -44,6 +54,16 @@
     },
     {
       "code_contexts": [],
+      "data_flow": {
+        "confidence": "low",
+        "data_categories": [],
+        "sink_count": 0,
+        "sink_providers": [],
+        "sink_types": [],
+        "source_count": 0,
+        "source_types": [],
+        "step_count": 0
+      },
       "dependencies": [
         "chromadb==0.3.26",
         "langchain==0.0.340",

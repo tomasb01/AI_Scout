@@ -183,12 +183,18 @@ async def _run_scan(scan_id: str, config: dict):
             except Exception as e:
                 log(f"Failed to scan {name}: {e}", "error")
 
-        # ── Phase 2: Code Analysis ──
+        # ── Phase 2: Code Analysis + Data Flow ──
         log("Analyzing code context...")
         for result in scan_results:
             repo_root = result.metadata.get("repo_root")
             if repo_root and result.assets:
                 await asyncio.to_thread(analyze_assets, result.assets, repo_root)
+
+        log("Building data flow maps...")
+        from aiscout.engine.data_flow import build_data_flows
+        for result in scan_results:
+            if result.assets:
+                await asyncio.to_thread(build_data_flows, result.assets)
 
         # Cleanup cloned repos
         for scanner in scanners:

@@ -345,23 +345,30 @@ def _derive_tags(asset: AIAsset) -> list[str]:
 def _build_summary(asset: AIAsset, provider: ProviderProfile | None) -> str:
     """Generate a summary focused on WHAT the solution does.
 
-    Priority:
-      0. LLM classification (highest — most accurate when available)
-      1. Synthesised purpose from strong signals (task_type + tags +
-         model_names + provider) — deterministic, beats noisy README
-         extraction for fine-tuning scripts, local inference notebooks,
-         MCP servers, …
-      2. Code-context inference (prompts, docstrings, README, functions)
+    Sprint 5 priority:
+      0. LLM classification (when available — most nuanced)
+      1. **DataFlowMap.solution_purpose** — structured, built from code
+         analysis (sources → steps → sinks), replaces the old synth
+         purpose and README-fragment extraction
+      2. Fallback to old code-context inference for assets without
+         enough data for a flow map
       3. Directory context + provider (last resort)
     """
     if asset.data_classification and asset.data_classification.details:
         return asset.data_classification.details
 
+    # Sprint 5 — use DataFlowMap as primary summary source
+    if asset.data_flow and asset.data_flow.solution_purpose:
+        purpose = asset.data_flow.solution_purpose
+        # Supplement with code-context inference if it adds value
+        extra = _infer_purpose(asset)
+        if extra and _is_descriptive(extra) and extra != purpose:
+            return f"{purpose} {extra}"
+        return purpose
+
+    # Pre-Sprint-5 fallback chain
     synth = _synthesize_purpose(asset, provider)
     if synth:
-        # If code context *also* gives us a rich purpose (docstrings,
-        # prompts), append it after the synth one-liner — the synth
-        # sentence answers "what is this", the inferred part adds "how".
         extra = _infer_purpose(asset)
         if extra and _is_descriptive(extra):
             return f"{synth} {extra}"
@@ -1474,16 +1481,28 @@ _SPECIFIC_SUPPRESSES_GENERIC = {
 }
 
 
+_SYNONYM_DEDUP = {
+    "Model Context Protocol": "MCP",
+    "Hugging Face": "HuggingFace",
+}
+
+
 def _deduplicate_tech_stack(stack: set[str]) -> set[str]:
     """Remove redundant entries from tech stack.
 
     Rules:
+    - Synonyms: "Model Context Protocol" → keep "MCP" only
     - If a specific model is present, remove the generic provider
       (e.g. "GPT-4o" present → remove "OpenAI")
     - If a versioned model is present, remove the unversioned
       (e.g. "Llama 3" present → remove "Llama")
     """
-    to_remove = set()
+    to_remove: set[str] = set()
+
+    # Synonyms: remove the verbose form if the short form is present
+    for verbose, short in _SYNONYM_DEDUP.items():
+        if verbose in stack and short in stack:
+            to_remove.add(verbose)
 
     # Provider suppression by specific models
     for provider, models in _MODEL_SUPPRESSES_PROVIDER.items():

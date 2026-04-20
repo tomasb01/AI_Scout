@@ -458,6 +458,37 @@ footer{text-align:center;color:var(--text-dim);font-size:.65rem;margin-top:2rem;
       <p style="font-size:.78rem;color:var(--text)">{{ insight.summary if insight else 'No analysis available.' }}</p>
     </div>
 
+    {# Data Flow (Sprint 5) #}
+    {% if asset.data_flow and (asset.data_flow.sources or asset.data_flow.sinks or asset.data_flow.processing_steps) %}
+    <div class="detail-section">
+      <h4>Data Flow</h4>
+      {% if asset.data_flow.sources %}
+      <div style="margin-bottom:.5rem">
+        <span style="font-size:.65rem;font-weight:700;text-transform:uppercase;color:var(--ok)">Sources</span>
+        {% for src in asset.data_flow.sources %}
+        <div class="finding" style="border-left-color:var(--ok)"><span class="ft" style="background:rgba(34,197,94,0.12);color:var(--ok)">{{ src.type }}</span> {{ src.name }}{% if src.detail %} <span style="color:var(--text-dim);font-size:.7rem">— {{ src.detail[:80] }}</span>{% endif %}</div>
+        {% endfor %}
+      </div>
+      {% endif %}
+      {% if asset.data_flow.processing_steps %}
+      <div style="margin-bottom:.5rem">
+        <span style="font-size:.65rem;font-weight:700;text-transform:uppercase;color:var(--accent)">Processing Steps</span>
+        {% for step in asset.data_flow.processing_steps %}
+        <div style="font-size:.75rem;color:var(--text);padding:.15rem 0 .15rem .8rem;border-left:2px solid var(--accent-bg)">{{ loop.index }}. {{ step }}</div>
+        {% endfor %}
+      </div>
+      {% endif %}
+      {% if asset.data_flow.sinks %}
+      <div>
+        <span style="font-size:.65rem;font-weight:700;text-transform:uppercase;color:var(--critical)">Destinations</span>
+        {% for sink in asset.data_flow.sinks %}
+        <div class="finding" style="border-left-color:var(--critical)"><span class="ft" style="background:rgba(239,68,68,0.12);color:var(--critical)">{{ sink.type }}</span> {{ sink.name }}{% if sink.detail %} <span style="color:var(--text-dim);font-size:.7rem">— {{ sink.detail[:80] }}</span>{% endif %}</div>
+        {% endfor %}
+      </div>
+      {% endif %}
+    </div>
+    {% endif %}
+
     {# Risk Reasons #}
     {% if insight and insight.risk_reasons %}
     <div class="detail-section">

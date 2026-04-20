@@ -196,39 +196,39 @@ class ReportGenerator:
         return dict(sorted(cats.items(), key=lambda x: -len(x[1])))
 
     def _detect_overlaps(self, assets: list[AIAsset]) -> list[dict]:
-        """Find solutions that do the same thing (functional overlap)."""
-        # Group by category + similar purpose
-        by_purpose: dict[str, list[AIAsset]] = defaultdict(list)
+        """Find solutions that do the same thing (functional overlap).
+
+        Sprint 5: uses DataFlowMap fingerprints instead of solution_name
+        string matching. Two assets overlap when they share the same
+        functional pattern (same AI API provider + same processing step
+        set + same data categories). This catches "basics vs basics_azure"
+        (same pattern, different endpoint) and "Stock Price in LangChain
+        vs Stock Price in Semantic Kernel" (same purpose, different
+        framework).
+        """
+        by_fingerprint: dict[str, list[AIAsset]] = defaultdict(list)
+
         for asset in assets:
-            insight = self.insights.get(asset.id) if self.insights else None
-            if not insight:
-                continue
-            # Create a fingerprint: category + key function names + data types
-            cat = insight.category
-            funcs = set()
-            for ctx in asset.code_contexts:
-                for f in ctx.functions:
-                    name = f.get("name", "")
-                    if name and not name.startswith("_") and name not in (
-                        "main", "__init__", "setup", "run", "config",
-                    ):
-                        funcs.add(name)
-            # Use solution_name as grouping key (duplicates = overlap)
-            key = insight.solution_name
-            by_purpose[key].append(asset)
+            fp = self._flow_fingerprint(asset)
+            if fp:
+                by_fingerprint[fp].append(asset)
 
         overlaps = []
-        for purpose, group in sorted(by_purpose.items(), key=lambda x: -len(x[1])):
+        for fingerprint, group in sorted(
+            by_fingerprint.items(), key=lambda x: -len(x[1])
+        ):
             if len(group) < 2:
                 continue
             authors = sorted({a.owner for a in group if a.owner != "unknown"})
             repos = sorted({a.repository for a in group})
-            # Tech stack across duplicates
-            techs = set()
+            techs: set[str] = set()
             for a in group:
-                i = self.insights.get(a.id)
+                i = self.insights.get(a.id) if self.insights else None
                 if i:
                     techs.update(i.tech_stack)
+
+            # Derive a readable purpose from the shared fingerprint
+            purpose = self._describe_overlap(group)
 
             overlaps.append({
                 "purpose": purpose,
@@ -237,9 +237,77 @@ class ReportGenerator:
                 "repos": repos,
                 "tech_stacks": sorted(_deduplicate_tech_stack(techs)),
                 "assets": group,
+                "category": self._overlap_category(group),
             })
 
         return overlaps
+
+    def _flow_fingerprint(self, asset: AIAsset) -> str:
+        """Build a fingerprint from DataFlowMap structure.
+
+        Two assets with the same fingerprint are functionally equivalent
+        from a data-flow perspective — same inputs, same AI processing,
+        same outputs.
+        """
+        flow = asset.data_flow
+        if not flow or (not flow.sinks and not flow.processing_steps):
+            # Fall back to old key: solution_name from enrichment
+            insight = self.insights.get(asset.id) if self.insights else None
+            if insight and insight.solution_name:
+                return f"name:{insight.solution_name}"
+            return ""
+
+        # Fingerprint components (sorted for determinism):
+        sink_providers = sorted({s.provider for s in flow.sinks if s.provider})
+        sink_types = sorted({s.type for s in flow.sinks})
+        step_set = sorted(set(flow.processing_steps))
+        categories = sorted(flow.data_categories)
+
+        return "|".join([
+            "sp:" + ",".join(sink_providers),
+            "st:" + ",".join(sink_types),
+            "steps:" + ",".join(step_set),
+            "cat:" + ",".join(categories),
+        ])
+
+    def _describe_overlap(self, group: list[AIAsset]) -> str:
+        """Generate a readable description of what the overlapping
+        solutions share."""
+        # Collect AI providers across the group
+        providers: set[str] = set()
+        step_union: set[str] = set()
+        for asset in group:
+            if asset.data_flow:
+                for sink in asset.data_flow.sinks:
+                    if sink.provider:
+                        providers.add(get_provider(sink.provider).display_name)
+                step_union.update(asset.data_flow.processing_steps)
+
+        parts = []
+        if providers:
+            parts.append(f"Using {', '.join(sorted(providers))}")
+        if step_union:
+            key_steps = [s for s in step_union if "LLM" in s or "agent" in s or "database" in s]
+            if key_steps:
+                parts.append(f"({', '.join(sorted(key_steps)[:2])})")
+
+        if parts:
+            return " ".join(parts)
+
+        # Fallback to first asset's name
+        return group[0].name if group else "Unknown overlap"
+
+    def _overlap_category(self, group: list[AIAsset]) -> str:
+        """Derive a category label for the overlap group."""
+        categories: list[str] = []
+        for asset in group:
+            insight = self.insights.get(asset.id) if self.insights else None
+            if insight and insight.category:
+                categories.append(insight.category)
+        if categories:
+            from collections import Counter
+            return Counter(categories).most_common(1)[0][0]
+        return "Other"
 
     def _build_tech_radar(self, assets: list[AIAsset]) -> list[dict]:
         """Count solutions per technology for radar chart."""

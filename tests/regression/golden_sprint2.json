@@ -38,6 +38,26 @@
           "prompt_count": 0
         }
       ],
+      "data_flow": {
+        "confidence": "low",
+        "data_categories": [
+          "credentials",
+          "user_messages"
+        ],
+        "sink_count": 1,
+        "sink_providers": [
+          "openai"
+        ],
+        "sink_types": [
+          "ai_api"
+        ],
+        "source_count": 2,
+        "source_types": [
+          "env_var",
+          "env_var"
+        ],
+        "step_count": 1
+      },
       "dependencies": [],
       "discovered_via": [
         "git_scanner"
@@ -160,7 +180,7 @@
       "tech_stack": [
         "Azure OpenAI",
         "Hugging Face",
-        "Model Context Protocol",
+        "MCP",
         "Ollama",
         "Qdrant"
       ]

@@ -85,23 +85,56 @@ class JSONExporter:
                     if author:
                         author_counts[author] = author_counts.get(author, 0) + 1
 
-        # Overlap detection
+        # Overlap detection — Sprint 5: DataFlowMap fingerprinting
         from collections import defaultdict
-        by_purpose: dict[str, list[AIAsset]] = defaultdict(list)
+        from aiscout.knowledge.providers import get_provider
+
+        by_fingerprint: dict[str, list[AIAsset]] = defaultdict(list)
         for asset in all_assets:
-            insight = self.insights.get(asset.id)
-            key = insight.solution_name if insight else asset.name
-            by_purpose[key].append(asset)
-        overlaps = [
-            {
-                "solution_name": name,
+            flow = asset.data_flow
+            if flow and (flow.sinks or flow.processing_steps):
+                sink_providers = sorted({s.provider for s in flow.sinks if s.provider})
+                sink_types = sorted({s.type for s in flow.sinks})
+                steps = sorted(set(flow.processing_steps))
+                cats = sorted(flow.data_categories)
+                fp = "|".join([
+                    "sp:" + ",".join(sink_providers),
+                    "st:" + ",".join(sink_types),
+                    "steps:" + ",".join(steps),
+                    "cat:" + ",".join(cats),
+                ])
+            else:
+                insight = self.insights.get(asset.id)
+                fp = f"name:{insight.solution_name if insight else asset.name}"
+            by_fingerprint[fp].append(asset)
+
+        overlaps = []
+        for fp, group in sorted(by_fingerprint.items(), key=lambda x: -len(x[1])):
+            if len(group) < 2:
+                continue
+            # Describe what they share
+            providers: set[str] = set()
+            cats_set: set[str] = set()
+            for a in group:
+                if a.data_flow:
+                    for s in a.data_flow.sinks:
+                        if s.provider:
+                            providers.add(get_provider(s.provider).display_name)
+                insight = self.insights.get(a.id)
+                if insight:
+                    cats_set.add(insight.category)
+
+            purpose = f"Using {', '.join(sorted(providers))}" if providers else group[0].name
+            category = max(cats_set, key=lambda c: sum(1 for a in group if self.insights.get(a.id) and self.insights[a.id].category == c)) if cats_set else "Other"
+
+            overlaps.append({
+                "purpose": purpose,
+                "category": category,
                 "count": len(group),
-                "asset_ids": [a.id for a in group],
+                "solutions": [a.name for a in group],
                 "authors": sorted({a.owner for a in group if a.owner != "unknown"}),
                 "repositories": sorted({a.repository for a in group}),
-            }
-            for name, group in by_purpose.items() if len(group) > 1
-        ]
+            })
         overlaps.sort(key=lambda x: -x["count"])
 
         return {

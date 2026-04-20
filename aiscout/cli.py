@@ -17,6 +17,7 @@ from rich.table import Table
 
 from aiscout import __version__
 from aiscout.engine.code_analyzer import analyze_assets
+from aiscout.engine.data_flow import build_data_flows
 from aiscout.engine.enrichment import enrich_assets
 from aiscout.engine.llm import LLMEngine
 from aiscout.report.html import ReportGenerator
@@ -129,6 +130,11 @@ def scan(
         repo_root = result.metadata.get("repo_root")
         if repo_root and result.assets:
             analyze_assets(result.assets, repo_root)
+
+    # Build data flow maps (Step 2 — rule-based, no LLM)
+    for result in scan_results:
+        if result.assets:
+            build_data_flows(result.assets)
 
     # Cleanup cloned repos
     for scanner in scanners:
