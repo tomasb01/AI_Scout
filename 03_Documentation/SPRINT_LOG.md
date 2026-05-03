@@ -1,6 +1,6 @@
-# AI Scout — Sprint Log (Sprinty 1–4)
+# AI Scout — Sprint Log (Sprinty 1–5)
 
-**Autor:** Claude + Tomáš | **Období:** 12.–15. dubna 2026 | **Testy:** 107 passing
+**Autor:** Claude + Tomáš | **Období:** 12. dubna – 3. května 2026 | **Testy:** 116 passing
 
 Tento dokument popisuje 4 sprinty vylepšení AI Scoutu se zaměřením na security, detekci, kvalitu výstupu a risk scoring. Každý sprint staví na předchozím. Celý vývoj probíhal nad jedním reálným repem (`AI-developer-3`, 144 AI assetů, 746 souborů) + sadou syntetických fixtures.
 
@@ -274,12 +274,71 @@ W/ LLM: "Web scraping solution that uses Playwright to navigate Google and take
 
 ---
 
-## Otevřené body pro Sprint 5+
+## Sprint 5 — Data Flow Mapper (20. dubna 2026)
 
-1. **Risk scoring kalibrace** — validace na 3–5 dalších reálných repech (enterprise SaaS, fintech, ML research)
-2. **Data Flow Mapper** — source → processing → sink model per solution. Architektura v `02_Architecture/02_Data_Flow_Mapper.md`.
-3. **Širší YAML config patterny** — `deployment_name:` je moc úzké; produkční repa používají jiné konvence
-4. **PII keyword expansion** — `stock_price`, `dividend`, `ticker`, `portfolio`, `transaction` do `_PII_KEYWORDS`
-5. **Sub-asset hierarchie** — flat tag model stačí pro MVP, ale hustě tagované assety (6+ tagů) potřebují expandable sub-component view
-6. **GitHub API Scanner** — REST API místo git clone, funguje na serverless
-7. **Enterprise scanners** — M365/Entra ID, Network/DNS, Endpoint
+**Cíl:** Sestavit chybějící Step 2 z architektury — rule-based Data Flow Mapper, který z extrahovaného CodeContextu (Step 1) konstruuje strukturovaný DataFlowMap (sources → processing steps → sinks). Žádný LLM potřeba.
+
+**Pozadí:** Audit product spec v8 odhalil, že Scout extrahuje bohatá data z kódu (funkce, API calls, prompty, data sources/sinks) ale 80 % z nich zahazuje — místo strukturovaného flow mapy produkuje generický string "Conversational chatbot powered by OpenAI."
+
+### Co přibylo
+
+| # | Změna | Soubor |
+|---|-------|--------|
+| **S5.1** | `DataFlowMap`, `FlowSource`, `FlowSink` modely; `data_flow` field na `AIAsset` | `models/assets.py` |
+| **S5.2** | `engine/data_flow.py` — rule-based flow: `_identify_sources`, `_identify_sinks`, `_infer_processing_steps`, `_compose_purpose`, `_classify_data_categories`, `_assess_confidence`. Filtry pro noise (cursor setup, fetchall, INSERT jako source). | nový soubor |
+| **S5.3** | Pipeline wiring: `cli.py` + `web/app.py` volají `build_data_flows()`. Summary se generuje Z DataFlowMap. | `cli.py`, `web/app.py`, `enrichment.py` |
+| **S5.4** | HTML report: Data Flow sekce (Sources zelené, Processing Steps modré, Destinations červené) | `report/templates/report.html.j2` |
+| **S5.5** | Overlap detekce přes DataFlowMap fingerprint. MCP display_name normalizace. Tech stack synonym dedup. JSON exporter přepsán. | `report/html.py`, `report/json_export.py`, `knowledge/providers.py`, `enrichment.py` |
+| **S5.6** | 9 DataFlowMap testů, 4 regression goldens | `tests/test_data_flow.py` |
+
+### Srovnání: Architektura (spec) vs Scout výstup po Sprint 5
+
+```
+ARCHITEKTURA:                        SCOUT PRODUKUJE:
+sources:                             sources:
+  POST /chat                           [user_input] /chat              ✓
+  get_history(session_id)               [database] SELECT...messages   ✓
+
+sinks:                               sinks:
+  Claude API                            [ai_api] Claude (model)        ✓
+  save_to_db                            [database] Database write      ✓
+  HTTP response                         [http_response] /chat          ✓
+
+steps:                               steps:
+  1. Receive message                    1. Receive user input          ✓
+  2. Load history                       2. Query data from database    ✓
+  3. Send to Claude                     3. Load conversation history   ✓
+  4. Store in DB                        4. Send prompt to LLM API      ✓
+  5. Return response                    5. Store results in database   ✓
+                                        6. Return response to client   ✓
+```
+
+### Výsledky
+
+- 116 testů passing (+9 DataFlowMap testů)
+- Overlaps: "8 solutions (?)" → "4× MCP Client Pattern [MCP & Integration]"
+- Tech stack dedup: "MCP" 44 + "Model Context Protocol" 38 → "MCP" 51 + 0
+- DataFlowMap na 100 % assetů (118/118)
+
+---
+
+## Report redesign — prototypy (20. dubna 2026)
+
+Audit aktuálního reportu odhalil, že vizuální design neodráží Sprint 5 capabilities. Analytics sekce ("Data Types Processed") je matoucí. Vytvořeny 3 HTML prototypy v `prototypes/`:
+
+- **Varianta A** (`variant_a.html`): Executive Dashboard — KPI → heatmap → tech/flow → overlaps → solutions tabulka
+- **Varianta B** (`variant_b.html`): Data Flow First — agregátní Sankey flow jako centrální vizuál
+- **Varianta C** (`variant_c.html`): Risk-Action Focused — "Where does your data go?" + exit points + action checklist
+
+Čeká na feedback a iteraci.
+
+---
+
+## Otevřené body
+
+1. **Report redesign** — implementovat vybranou variantu (nebo mix) jako nový `report.html.j2`
+2. **Risk scoring kalibrace** — validace na 3–5 dalších reálných repech
+3. **Summary quality edge cases** — "Conversational chatbot" pro API tutorials; overlaps naming
+4. **Instrumentovaná exekuce** (spec 3.5) — LLM generuje instrumentovaný kód, Docker sandbox, klasifikace reálných dat. Phase 2.
+5. **GitHub API Scanner** — REST API místo git clone, serverless support
+6. **Enterprise scanners** — M365/Entra ID, Network/DNS, Endpoint

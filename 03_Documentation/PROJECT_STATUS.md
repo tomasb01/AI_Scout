@@ -1,8 +1,8 @@
 # AI Scout — Project Status & Documentation
 
-**Last updated: April 17, 2026 | Version: 0.6.0 + Sprinty 1–4**
+**Last updated: May 3, 2026 | Version: 0.7.0-dev + Sprinty 1–5**
 
-> Detailní log čtyř bezpečnostních a kvalitativních sprintů (12.–15. 4. 2026): viz **[SPRINT_LOG.md](SPRINT_LOG.md)** (107 testů, risk rework, LLM e2e, MCP server/client, CI/CD scanner, dep advisories).
+> Detailní log pěti sprintů (12. 4. – 3. 5. 2026): viz **[SPRINT_LOG.md](SPRINT_LOG.md)** (116 testů, security hardening, Data Flow Mapper, LLM e2e validace, risk rework, CI/CD scanner, dep advisories, report redesign prototypy).
 
 ---
 
@@ -26,7 +26,9 @@ AI Scout is a self-hosted, open-source tool that automatically discovers, maps, 
 | **LLM Engine** | `aiscout/engine/llm.py` | ✅ Done | Ollama + OpenAI-compatible API modes. Prompt includes full code context (functions, prompts, API calls, data flows). Health check, batch classify, rate limiting, graceful fallback. Default model: qwen2.5-coder:7b. |
 | **Enrichment** | `aiscout/engine/enrichment.py` | ✅ Done | Solution naming (from code purpose, not framework), category classification (7 categories), tech stack extraction, data involved detection, risk reasoning with specific explanations, recommendations, overlap detection. |
 | **Provider Knowledge Base** | `aiscout/knowledge/providers.py` | ✅ Done | 30+ AI provider profiles: display name, vendor, data residency, training policy, certifications, free tier risk, enterprise notes. |
-| **Data Model** | `aiscout/models/assets.py` | ✅ Done | Pydantic models: AIAsset, CodeContext, Finding, DataFlow, ProviderInfo, ClassificationResult, ScanResult, ScannerConfig. |
+| **Data Flow Mapper** | `aiscout/engine/data_flow.py` | ✅ Done (Sprint 5) | Rule-based sources→steps→sinks construction from CodeContext. DataFlowMap, FlowSource, FlowSink models. No LLM needed. |
+| **Dependency Advisories** | `aiscout/knowledge/dependency_advisories.py` | ✅ Done (Sprint 3) | Offline KB: openai<1.0, langchain<0.1, transformers<4.36, llama-index<0.10, chromadb<0.4, gradio<4.0. |
+| **Data Model** | `aiscout/models/assets.py` | ✅ Done | Pydantic models: AIAsset (with data_flow, task_types, tags), CodeContext, DataFlowMap, FlowSource, FlowSink, Finding, ProviderInfo, ClassificationResult. |
 
 ### Report & Visualization
 
@@ -223,7 +225,7 @@ AI_Scout/
 ├── landing/
 │   ├── index.html                    # Sales landing page
 │   └── screenshots/                  # Demo screenshots
-├── tests/                            # 107 tests (Sprinty 1–4)
+├── tests/                            # 116 tests (Sprinty 1–5)
 ├── Dockerfile                        # Docker deployment
 ├── docker-compose.yml
 ├── pyproject.toml
