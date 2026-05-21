@@ -22,6 +22,7 @@ from aiscout.engine.enrichment import enrich_assets
 from aiscout.engine.llm import LLMEngine
 from aiscout.report.html import ReportGenerator
 from aiscout.scanners.git_scanner import GitScanner
+from aiscout.scanners.github_org import OrgEnumerationError, enumerate_org_repos
 
 console = Console()
 
@@ -36,9 +37,22 @@ def cli():
 @cli.command()
 @click.option("--repo", "-r", multiple=True, help="Git repo URL (repeatable)")
 @click.option("--local", "-l", multiple=True, help="Local repo path (repeatable)")
+@click.option(
+    "--org",
+    multiple=True,
+    help="GitHub organization or user (URL or name) — scans all visible repos (repeatable)",
+)
 @click.option("--config", "-c", type=click.Path(exists=True), help="YAML config file")
 @click.option("--token", "-t", envvar="AISCOUT_GIT_TOKEN", help="Git access token")
 @click.option("--branch", "-b", default="main", help="Default branch to scan")
+@click.option("--include-archived", is_flag=True, help="Include archived repos in --org scans")
+@click.option("--include-forks", is_flag=True, help="Include forked repos in --org scans")
+@click.option(
+    "--max-repos",
+    type=int,
+    default=200,
+    help="Cap on repos enumerated per --org (safety limit)",
+)
 @click.option("--output", "-o", default="aiscout_report.html", help="Output path (.html or .json)")
 @click.option(
     "--llm-url",
@@ -62,12 +76,18 @@ def cli():
 )
 @click.option("--no-llm", is_flag=True, help="Skip LLM classification")
 def scan(
-    repo, local, config, token, branch, output,
+    repo, local, org, config, token, branch,
+    include_archived, include_forks, max_repos, output,
     llm_url, llm_model, llm_mode, llm_key, no_llm,
 ):
     """Scan Git repositories for AI assets."""
     # Build list of repos to scan
-    repos = _build_repo_list(repo, local, config, token, branch)
+    repos = _build_repo_list(
+        repo, local, org, config, token, branch,
+        include_archived=include_archived,
+        include_forks=include_forks,
+        max_repos=max_repos,
+    )
 
     if not repos:
         console.print("[red]Error:[/] No repositories specified.")
@@ -284,9 +304,14 @@ def _validate_local_path(raw: str) -> Path:
 def _build_repo_list(
     repo_urls: tuple,
     local_paths: tuple,
+    orgs: tuple,
     config_path: str | None,
     default_token: str | None,
     default_branch: str,
+    *,
+    include_archived: bool = False,
+    include_forks: bool = False,
+    max_repos: int = 200,
 ) -> list[dict]:
     """Build a normalized list of repos from CLI args and/or YAML config."""
     repos = []
@@ -296,6 +321,17 @@ def _build_repo_list(
         validated = _validate_repo_url(url)
         repos.append({"url": validated, "token": default_token, "branch": default_branch,
                        "name": validated.rstrip("/").split("/")[-1].removesuffix(".git")})
+
+    # From CLI --org flags (enumerate all visible repos via GitHub API)
+    for org in orgs:
+        repos.extend(
+            _enumerate_org(
+                org, default_token, default_branch,
+                include_archived=include_archived,
+                include_forks=include_forks,
+                max_repos=max_repos,
+            )
+        )
 
     # From CLI --local flags
     for path in local_paths:
@@ -337,6 +373,53 @@ def _build_repo_list(
             console.print(f"[red]Error loading config:[/] {e}")
 
     return repos
+
+
+def _enumerate_org(
+    org: str,
+    token: str | None,
+    default_branch: str,
+    *,
+    include_archived: bool,
+    include_forks: bool,
+    max_repos: int,
+) -> list[dict]:
+    """Resolve a GitHub org/user into validated repo entries for the scan loop."""
+    try:
+        enum = enumerate_org_repos(
+            org, token,
+            include_archived=include_archived,
+            include_forks=include_forks,
+            max_repos=max_repos,
+        )
+    except OrgEnumerationError as e:
+        console.print(f"[red]Error enumerating '{org}':[/] {e}")
+        return []
+
+    skipped = []
+    if enum.skipped_archived:
+        skipped.append(f"{enum.skipped_archived} archived")
+    if enum.skipped_forks:
+        skipped.append(f"{enum.skipped_forks} forks")
+    if enum.skipped_over_limit:
+        skipped.append(f"{enum.skipped_over_limit} over --max-repos")
+    skip_note = f" (skipped {', '.join(skipped)})" if skipped else ""
+    console.print(
+        f"[blue]{enum.owner}:[/] enumerated {enum.total_seen} repo(s), "
+        f"scanning {len(enum.repos)}{skip_note}"
+    )
+
+    entries = []
+    for item in enum.repos:
+        # Run API-provided clone URLs through the same SSRF/scheme guard.
+        try:
+            item["url"] = _validate_repo_url(item["url"])
+        except InputValidationError as e:
+            console.print(f"  [yellow]Skipping {item.get('name')}:[/] {e}")
+            continue
+        item.setdefault("branch", default_branch)
+        entries.append(item)
+    return entries
 
 
 def _apply_config_overrides(
