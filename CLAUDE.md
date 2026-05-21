@@ -14,6 +14,15 @@ Key differentiator: Uses the customer's own LLM (enterprise API or local Ollama)
 
 Pitch: *"Here are 47 AI solutions in your company. Leadership doesn't know about 30 of them. 12 work with sensitive data. 8 send data outside the EU. Here's the map, risk assessment, and recommendations."*
 
+## Who it's for (personas)
+
+| Persona | Need | Entry point |
+|---------|------|-------------|
+| **Individual developer** | Don't leak keys / send sensitive data to an LLM while building | `aiscout check` (pre-commit hook + GitHub Action) |
+| **Small team / startup** | See all AI across our org | `aiscout scan --org <name> --token <pat>` |
+| **Mid-size / scale-up** | Low-trust first scan, then expand | `aiscout scan --org <name> --manifests-only` → opt-in deeper scan |
+| **Enterprise / regulated** | Least-privilege access, full inventory, audit | `--org` + org-owner token / GitHub App (planned) — see `03_Documentation/GITHUB_ACCESS_STRATEGY.md` |
+
 ## Tech stack
 
 - Language: Python 3.11+ (Docker image: 3.12-slim)
@@ -44,6 +53,15 @@ uv run aiscout scan --repo https://github.com/org/repo --llm-model qwen2.5-coder
 # With OpenAI-compatible API (Azure OpenAI, vLLM, LocalAI, TGI, Groq, ...)
 uv run aiscout scan --repo ... --llm-mode openai --llm-url https://api.openai.com --llm-key sk-... --llm-model gpt-4o-mini --output report.html
 
+# Scan a whole GitHub organization / user (all token-visible repos)
+uv run aiscout scan --org acme --token ghp_xxx --no-llm --output report.html
+
+# Low-sensitivity first scan — dependency manifests only, never source
+uv run aiscout scan --org acme --token ghp_xxx --manifests-only --output report.html
+
+# Developer guardrail (pre-commit / CI): fail on leaked keys or sensitive LLM egress
+uv run aiscout check --path .          # exit 1 on issues; --warn-only to never fail
+
 # Web UI (3-step wizard)
 uv run aiscout web --port 8080
 
@@ -51,7 +69,10 @@ uv run aiscout web --port 8080
 uv run pytest tests/ -q
 ```
 
-Key CLI parameters: `--repo`/`--local` (source, multi-repo + YAML config supported), `--llm-url`, `--llm-model`, `--llm-mode` (ollama|openai), `--llm-key`, `--no-llm`, `--output` (.html/.json auto-detect), `--branch`, `--token`.
+Key CLI parameters:
+- `aiscout scan` — `--repo`/`--local`/`--org` (source; multi-repo + YAML config supported), `--include-archived`/`--include-forks`/`--max-repos` (org filters), `--manifests-only`, `--llm-url`, `--llm-model`, `--llm-mode` (ollama|openai), `--llm-key`, `--no-llm`, `--output` (.html/.json auto-detect), `--branch`, `--token`.
+- `aiscout check` — `--path` (default `.`), `--warn-only`. Rule-based, no network; exits 1 on hardcoded keys or sensitive data sent to an external LLM (local runtimes like Ollama exempt).
+- `aiscout web` — `--host`, `--port`.
 
 ## Architecture (implemented)
 
@@ -75,14 +96,16 @@ Architecture docs: `02_Architecture/` (`00_System_Overview.md`, `01_Git_Scanner_
 ```
 AI_Scout/
 ├── pyproject.toml · Dockerfile · docker-compose.yml · vercel.json · uv.lock
+├── .pre-commit-hooks.yaml              # `ai-scout-guardrail` hook for other repos
 ├── 01_Prod_specs/                      # Product spec (latest: v10), [Archive]/ older
 ├── 02_Architecture/                    # Architecture docs
-├── 03_Documentation/                   # PROJECT_STATUS.md, SPRINT_LOG.md
+├── 03_Documentation/                   # PROJECT_STATUS.md, SPRINT_LOG.md, GITHUB_ACCESS_STRATEGY.md
 ├── aiscout/
-│   ├── cli.py                          # CLI: aiscout scan / aiscout web
+│   ├── cli.py                          # CLI: aiscout scan / check / web
 │   ├── scanners/
 │   │   ├── base.py                     # BaseScanner ABC
-│   │   └── git_scanner.py              # Git Repository Scanner
+│   │   ├── git_scanner.py              # Git Repository Scanner (+ manifests-only mode)
+│   │   └── github_org.py               # GitHub org/user repo enumeration (REST API)
 │   ├── engine/
 │   │   ├── code_analyzer.py            # Code Context Extractor (AST + regex)
 │   │   ├── data_flow.py                # Data Flow Mapper (rule-based, ~706 lines)
@@ -94,16 +117,24 @@ AI_Scout/
 │   ├── models/
 │   │   └── assets.py                   # Pydantic models
 │   ├── report/
-│   │   ├── html.py                     # HTML report generator
+│   │   ├── html.py                     # HTML report generator (+ GitHub Coverage section)
 │   │   ├── json_export.py              # JSON export
 │   │   └── templates/report.html.j2    # Dashboard template
 │   └── web/
 │       ├── app.py                      # FastAPI server
 │       └── templates/index.html        # Scanner wizard
+├── examples/ai-scout-guardrail.yml     # GitHub Action template for the guardrail
 ├── landing/                            # Landing page + screenshots
 ├── api/ · scripts/
-└── tests/                              # ~116 tests across 10 files
+└── tests/                              # ~139 tests across 11 files
 ```
+
+### GitHub org scanning & developer guardrail
+
+- **Org enumeration** (`scanners/github_org.py`): `--org <name>` resolves a GitHub org/user into all token-visible repos via REST (`/orgs` → `/users` fallback, `Link` pagination), skips archived/forks by default, caps with `--max-repos`, feeds the existing multi-repo loop. Only repos the token can see are returned.
+- **Manifest-only** (`--manifests-only`): reads only dependency manifests, never source (skips code-context analysis too) — a low-sensitivity first scan for security sign-off.
+- **GitHub Coverage** report section: repos found / scanned / skipped, with a token-visibility disclaimer.
+- **Guardrail** (`aiscout check`): rule-based, network-free pre-commit/CI gate. Exits non-zero on hardcoded keys or sensitive data (personal/financial/medical/credentials) sent to an *external* LLM (local runtimes like Ollama exempt). Ships `.pre-commit-hooks.yaml` + `examples/ai-scout-guardrail.yml`.
 
 ### Scanner plugin interface
 
@@ -180,8 +211,9 @@ API keys never stored raw (redacted in `Finding`, `<REDACTED_API_KEY>` in prompt
 | Phase | Status | Focus |
 |-------|--------|-------|
 | 0 MVP | ✅ done (v0.7.0) | Git scanner, Code Context, Data Flow Mapper, LLM Engine, Enrichment, HTML/JSON report, Web UI, CLI, Docker |
+| — | ✅ recent | GitHub org/user enumeration (`--org`), manifest-only scan, GitHub Coverage report, developer guardrail (`aiscout check` + pre-commit + Action) |
 | — | ⚠️ in progress | Report redesign (3 prototypes A/B/C), risk-scoring calibration on more repos |
-| 1 Expand | ⏳ | GitHub API scanner, M365/Entra ID, Power Platform, Network/DNS, Google Workspace, Endpoint, MCP/Agent scanners |
+| 1 Expand | ⏳ | GitHub API scanner (read via REST, not clone), M365/Entra ID, Power Platform, Network/DNS, Google Workspace, Endpoint, MCP/Agent scanners; GitHub App auth for least-privilege org access |
 | 2 Analyze | ⏳ | Instrumented execution (sandboxed runtime analysis), Data Classification Modes (schema-only / sampled / customer-exec) |
 | 3 Secure | ⏳ | Security Assessment module (API key mgmt, data exposure, input sanitization, access control, compliance, architectural review) |
 | 4 Monitor | ⏳ | Continuous monitoring / Watch Mode, alerts, Remediation Roadmap, Scout Cloud Engine (Mode 3) |

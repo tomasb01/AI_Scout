@@ -1,8 +1,8 @@
 # AI Scout — Project Status & Documentation
 
-**Last updated: May 21, 2026 | Version: 0.7.0 | Sprints 1–5 completed**
+**Last updated: May 21, 2026 | Version: 0.7.0 (+ org-scan / guardrail on branch) | Sprints 1–5 completed**
 
-> Detailní log sprintů: viz **[SPRINT_LOG.md](SPRINT_LOG.md)** (116 testů, security hardening, Data Flow Mapper, LLM e2e validace, risk rework, CI/CD scanner, dep advisories, report redesign prototypy).
+> Detailní log sprintů: viz **[SPRINT_LOG.md](SPRINT_LOG.md)** (security hardening, Data Flow Mapper, LLM e2e validace, risk rework, CI/CD scanner, dep advisories, report redesign prototypy). Currently **139 tests** passing (116 at v0.7.0 + org enumeration, manifest-only, GitHub Coverage, developer guardrail).
 
 ---
 
@@ -11,6 +11,22 @@
 AI Scout is a self-hosted, open-source tool that automatically discovers, maps, and assesses all AI solutions in an organization's Git repositories. It scans code for AI integrations (imports, API keys, dependencies), analyzes what each solution does through deep code analysis, builds data flow maps (sources → processing → sinks), and generates an interactive HTML report with executive summary, risk assessment, overlap detection, and visual analytics.
 
 **Motto:** Visibility. Efficiency. Security.
+
+---
+
+## Who It's For (at a glance)
+
+One tool, four audiences — pick the entry point that matches the trust you can get.
+
+| Persona | Their need | What AI Scout gives them | How they run it |
+|---------|-----------|--------------------------|-----------------|
+| **Individual developer** | Don't leak keys or send sensitive data to an LLM while building | Fast local guardrail, fully rule-based, no network | `aiscout check` · pre-commit hook · GitHub Action (`examples/ai-scout-guardrail.yml`) |
+| **Small team / startup** | See every AI solution across our org | Whole-org discovery in one report | `aiscout scan --org <name> --token <pat>` |
+| **Mid-size / scale-up** | A low-trust first scan, then expand | Manifest-first scan (reads only dependency files, never source) | `aiscout scan --org <name> --manifests-only` → opt-in deeper scan |
+| **Enterprise / regulated** | Least-privilege access, full inventory, audit | Org scan + "GitHub Coverage" inventory in report; tiered access model | `--org` + org-owner token / GitHub App (planned). See **[GITHUB_ACCESS_STRATEGY.md](GITHUB_ACCESS_STRATEGY.md)** |
+
+Access approaches per organization size (individual → enterprise) are detailed in
+**[GITHUB_ACCESS_STRATEGY.md](GITHUB_ACCESS_STRATEGY.md)**.
 
 ---
 
@@ -48,8 +64,20 @@ AI Scout is a self-hosted, open-source tool that automatically discovers, maps, 
 |-----------|------|--------|-------------|
 | **Web UI** | `web/app.py` + `templates/index.html` | ✅ | FastAPI 3-step wizard: Repositories → LLM Config (No LLM / Ollama / API Key) → Scan with SSE progress. Data Flow integrated in pipeline. |
 | **Landing Page** | `landing/index.html` + screenshots/ | ✅ | Sales pitch with screenshots, role-based benefits (CEO → CTO → DevOps → CISO), pricing (Free / Pro TBA). |
-| **CLI** | `cli.py` | ✅ | `aiscout scan` (multi-repo, YAML config, LLM options, .html/.json auto-detect) + `aiscout web`. |
+| **CLI** | `cli.py` | ✅ | `aiscout scan` (multi-repo, YAML config, LLM options, .html/.json auto-detect) + `aiscout check` + `aiscout web`. |
 | **Docker** | `Dockerfile` + `docker-compose.yml` | ✅ | Python 3.12-slim + git + landing. Default: `aiscout web --port 8080`. |
+
+### GitHub Org Scanning & Developer Guardrail (latest)
+
+| Component | File | Status | Description |
+|-----------|------|--------|-------------|
+| **Org/User Enumeration** | `scanners/github_org.py` | ✅ | Resolves a GitHub org or user (URL or bare name) into all token-visible repos via the REST API. Tries `/orgs` then falls back to `/users`, follows `Link` pagination, skips archived/forks by default, caps with `--max-repos`. Feeds the existing multi-repo scan loop. |
+| **`--org` CLI flag** | `cli.py` | ✅ | `aiscout scan --org <name>` (repeatable) + `--include-archived` / `--include-forks` / `--max-repos`. API clone URLs revalidated through the SSRF/scheme guard. |
+| **Manifest-only mode** | `cli.py` + `git_scanner.py` | ✅ | `--manifests-only` reads only dependency manifests (requirements.txt, package.json, pyproject.toml), never source — including skipping code-context analysis. Low-sensitivity first scan for security sign-off. |
+| **GitHub Coverage in report** | `report/html.py` + template | ✅ | "GitHub Coverage" section shows repos found / scanned / skipped (archived, forks, over-limit, blocked) with a token-visibility disclaimer. |
+| **Guardrail (`aiscout check`)** | `cli.py` | ✅ | Rule-based, network-free pre-commit/CI check. Exits non-zero on hardcoded LLM API keys or sensitive data (personal/financial/medical/credentials) sent to an external LLM. Local runtimes (Ollama) exempt. `--warn-only` to report without failing. |
+| **Pre-commit hook** | `.pre-commit-hooks.yaml` | ✅ | `ai-scout-guardrail` hook id, consumable by any repo via the pre-commit framework. |
+| **GitHub Action template** | `examples/ai-scout-guardrail.yml` | ✅ | Copy-paste workflow to gate pull requests with the guardrail. |
 
 ### Security (Sprint 1)
 
@@ -128,6 +156,7 @@ Architecture documents: `02_Architecture/`
 | v0.6.0 | Apr 11 | Landing page with screenshots |
 | v0.6.x | Apr 12-15 | Sprints 1-4: security, task_types, MCP, dep advisories, CI/CD, LLM e2e |
 | **v0.7.0** | **Apr 20** | **Sprint 5: Data Flow Mapper, DataFlowMap models, overlap fingerprinting, 116 tests** |
+| _(branch)_ | May 21 | GitHub org/user enumeration (`--org`), manifest-only mode, GitHub Coverage report section, developer guardrail (`aiscout check` + pre-commit hook + Action template). 139 tests |
 
 ---
 
@@ -148,6 +177,15 @@ uv run aiscout scan --repo https://github.com/org/repo --llm-model qwen2.5-coder
 
 # CLI scan (with OpenAI-compatible API)
 uv run aiscout scan --repo https://github.com/org/repo --llm-mode openai --llm-url https://api.openai.com --llm-key sk-... --llm-model gpt-4o-mini --output report.html
+
+# Scan a whole GitHub organization (all token-visible repos)
+uv run aiscout scan --org acme --token ghp_xxx --no-llm --output report.html
+
+# Low-sensitivity first scan — dependency manifests only, no source read
+uv run aiscout scan --org acme --token ghp_xxx --manifests-only --output report.html
+
+# Developer guardrail (pre-commit / CI) — fails on leaked keys or sensitive LLM egress
+uv run aiscout check --path .
 
 # Web UI
 uv run aiscout web --port 8080
