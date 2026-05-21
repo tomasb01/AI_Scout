@@ -1,0 +1,34 @@
+# AI Scout — AI security guardrail (GitHub Actions)
+#
+# Drop this file into your project at .github/workflows/ai-scout-guardrail.yml
+# to fail pull requests that introduce a hardcoded LLM API key or send
+# sensitive data (personal / financial / medical / credentials) to an
+# external LLM. Fully rule-based — no LLM call, no network egress of your code.
+#
+# Tip: start with `--warn-only` (see below) so the check reports without
+# blocking, then drop the flag once your repo is clean.
+
+name: AI Scout guardrail
+
+on:
+  pull_request:
+  push:
+    branches: [main, master]
+
+jobs:
+  ai-scout:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install AI Scout
+        run: pip install git+https://github.com/tomasb01/AI_Scout.git
+
+      - name: Run guardrail
+        run: aiscout check --path .
+        # To report without failing the build, use instead:
+        # run: aiscout check --path . --warn-only
