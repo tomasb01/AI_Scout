@@ -20,6 +20,8 @@ from aiscout.engine.code_analyzer import analyze_assets
 from aiscout.engine.data_flow import build_data_flows
 from aiscout.engine.enrichment import enrich_assets
 from aiscout.engine.llm import LLMEngine
+from aiscout.knowledge.providers import get_provider
+from aiscout.models import FindingType
 from aiscout.report.html import ReportGenerator
 from aiscout.scanners.git_scanner import GitScanner
 from aiscout.scanners.github_org import OrgEnumerationError, enumerate_org_repos
@@ -526,6 +528,124 @@ def _print_summary(scan_results: list, report_path: Path):
 
     console.print(table)
     console.print(f"\nReport saved to [bold blue]{report_path}[/]")
+
+
+# Data Flow Mapper category vocabulary (see engine/data_flow.py) that should
+# never leave the perimeter for an external LLM.
+_SENSITIVE_CATEGORIES = {
+    "personal_data", "credentials", "financial_data", "medical_data",
+}
+
+
+@cli.command()
+@click.option("--path", "-p", default=".", help="Local path to check (default: current dir)")
+@click.option("--warn-only", is_flag=True, help="Report issues but always exit 0")
+def check(path, warn_only):
+    """Pre-commit / CI guardrail for AI code.
+
+    Statically scans a local working tree and fails (exit 1) when it finds
+    a hardcoded API key or code that sends sensitive data (PII, financial,
+    confidential) to an external LLM. Fully rule-based — no LLM, no network.
+    """
+    abs_path = _validate_local_path(path)
+    scanner = GitScanner(repo_path=str(abs_path))
+    result = scanner.scan()
+
+    repo_root = result.metadata.get("repo_root")
+    if repo_root and result.assets:
+        analyze_assets(result.assets, repo_root)
+        build_data_flows(result.assets)
+    scanner.cleanup()
+
+    if result.errors:
+        for err in result.errors:
+            console.print(f"[red]Error:[/] {err}")
+        sys.exit(2)
+
+    key_issues, egress_issues = _evaluate_guardrail(result.assets)
+    _print_guardrail(key_issues, egress_issues)
+
+    if (key_issues or egress_issues) and not warn_only:
+        sys.exit(1)
+
+
+def _evaluate_guardrail(assets: list) -> tuple[list[dict], list[dict]]:
+    """Split assets into hardcoded-key issues and sensitive-egress issues."""
+    key_issues: list[dict] = []
+    egress_issues: list[dict] = []
+
+    for asset in assets:
+        for f in asset.raw_findings:
+            if f.type == FindingType.API_KEY_DETECTED:
+                key_issues.append({
+                    "file": f.file_path,
+                    "line": f.line_number,
+                    "provider": f.provider or "unknown",
+                    "redacted": f.redacted_content or "",
+                })
+
+        flow = asset.data_flow
+        if not flow:
+            continue
+        sensitive = sorted(_SENSITIVE_CATEGORIES.intersection(
+            c.lower() for c in flow.data_categories
+        ))
+        if not sensitive:
+            continue
+        external = _external_llm_sinks(flow.sinks)
+        if external:
+            egress_issues.append({
+                "name": asset.name,
+                "file": asset.file_path,
+                "categories": sensitive,
+                "sinks": external,
+            })
+
+    return key_issues, egress_issues
+
+
+def _external_llm_sinks(sinks: list) -> list[str]:
+    """Names of AI-API sinks that leave the perimeter (excludes local runtimes)."""
+    external = []
+    for sink in sinks:
+        if sink.type != "ai_api":
+            continue
+        # A known local runtime (e.g. Ollama) keeps data inside the perimeter.
+        if sink.provider and get_provider(sink.provider).category == "local_runtime":
+            continue
+        external.append(sink.name or sink.provider or "external LLM")
+    return external
+
+
+def _print_guardrail(key_issues: list[dict], egress_issues: list[dict]) -> None:
+    if not key_issues and not egress_issues:
+        console.print(Panel(
+            "[bold green]No issues found.[/]\n"
+            "No hardcoded API keys; no sensitive data sent to external LLMs.",
+            title="AI Scout — guardrail PASSED",
+            border_style="green",
+        ))
+        return
+
+    if key_issues:
+        console.print("\n[bold red]Hardcoded API keys[/]")
+        for i in key_issues:
+            loc = f"{i['file']}:{i['line']}" if i["line"] else i["file"]
+            console.print(f"  [red]✗[/] {loc} — {i['provider']} key ({i['redacted']})")
+
+    if egress_issues:
+        console.print("\n[bold red]Sensitive data sent to external LLM[/]")
+        for i in egress_issues:
+            cats = ", ".join(i["categories"])
+            sinks = ", ".join(i["sinks"])
+            console.print(f"  [red]✗[/] {i['name']} ([dim]{i['file']}[/]) — {cats} → {sinks}")
+
+    total = len(key_issues) + len(egress_issues)
+    console.print(Panel(
+        f"[bold red]{total} issue(s) found.[/]",
+        title="AI Scout — guardrail FAILED",
+        border_style="red",
+    ))
 
 
 @cli.command()

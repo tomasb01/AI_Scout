@@ -8,9 +8,19 @@ from click.testing import CliRunner
 
 from aiscout.cli import (
     InputValidationError,
+    _evaluate_guardrail,
+    _external_llm_sinks,
     _validate_local_path,
     _validate_repo_url,
     cli,
+)
+from aiscout.models import (
+    AIAsset,
+    DataFlowMap,
+    Finding,
+    FindingType,
+    FlowSink,
+    ProviderInfo,
 )
 
 
@@ -46,6 +56,87 @@ def test_scan_local_no_llm():
     content = Path(output).read_text()
     assert "AI Scout" in content
     Path(output).unlink()
+
+
+# ── Guardrail (aiscout check) ────────────────────────────────────────────
+
+def test_external_llm_sinks_excludes_local_runtime():
+    sinks = [
+        FlowSink(type="ai_api", provider="openai", name="OpenAI API"),
+        FlowSink(type="ai_api", provider="ollama", name="Ollama (local)"),
+        FlowSink(type="database", provider="", name="Postgres"),
+    ]
+    external = _external_llm_sinks(sinks)
+    assert external == ["OpenAI API"]
+
+
+def test_evaluate_guardrail_flags_key_and_egress():
+    asset = AIAsset(
+        name="chatbot",
+        repository="r",
+        file_path="app.py",
+        provider=ProviderInfo(name="openai"),
+        raw_findings=[
+            Finding(
+                type=FindingType.API_KEY_DETECTED,
+                file_path="app.py",
+                line_number=2,
+                content="sk-x",
+                redacted_content="sk-x...x",
+                provider="openai",
+            ),
+        ],
+        data_flow=DataFlowMap(
+            data_categories=["personal_data", "user_messages"],
+            sinks=[FlowSink(type="ai_api", provider="openai", name="OpenAI API")],
+        ),
+    )
+    keys, egress = _evaluate_guardrail([asset])
+    assert len(keys) == 1 and keys[0]["provider"] == "openai"
+    assert len(egress) == 1 and egress[0]["categories"] == ["personal_data"]
+
+
+def test_evaluate_guardrail_local_egress_is_clean():
+    asset = AIAsset(
+        name="local-bot", repository="r", file_path="app.py",
+        data_flow=DataFlowMap(
+            data_categories=["personal_data"],
+            sinks=[FlowSink(type="ai_api", provider="ollama", name="Ollama")],
+        ),
+    )
+    keys, egress = _evaluate_guardrail([asset])
+    assert keys == []
+    assert egress == []
+
+
+def test_check_command_clean_passes():
+    runner = CliRunner()
+    with tempfile.TemporaryDirectory() as d:
+        (Path(d) / "util.py").write_text("def add(a, b):\n    return a + b\n")
+        result = runner.invoke(cli, ["check", "--path", d])
+    assert result.exit_code == 0
+    assert "PASSED" in result.output
+
+
+def test_check_command_fails_on_hardcoded_key():
+    runner = CliRunner()
+    with tempfile.TemporaryDirectory() as d:
+        (Path(d) / "app.py").write_text(
+            'import openai\nKEY = "sk-abcdefghijklmnop1234567890abcdef"\n'
+        )
+        result = runner.invoke(cli, ["check", "--path", d])
+    assert result.exit_code == 1
+    assert "FAILED" in result.output
+
+
+def test_check_command_warn_only_exits_zero():
+    runner = CliRunner()
+    with tempfile.TemporaryDirectory() as d:
+        (Path(d) / "app.py").write_text(
+            'import openai\nKEY = "sk-abcdefghijklmnop1234567890abcdef"\n'
+        )
+        result = runner.invoke(cli, ["check", "--path", d, "--warn-only"])
+    assert result.exit_code == 0
 
 
 def test_scan_with_yaml_config():

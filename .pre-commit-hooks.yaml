@@ -1,0 +1,7 @@
+- id: ai-scout-guardrail
+  name: AI Scout — AI security guardrail
+  description: Fails the commit on hardcoded LLM API keys or sensitive data sent to external LLMs.
+  entry: aiscout check
+  language: python
+  pass_filenames: false
+  always_run: true
