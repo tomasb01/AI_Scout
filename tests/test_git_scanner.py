@@ -137,6 +137,30 @@ def test_full_scan_local():
     assert "openai" in all_providers
 
 
+def test_manifests_only_skips_source():
+    with tempfile.TemporaryDirectory() as tmpdir:
+        root = Path(tmpdir)
+        # Source file with an import AND a hardcoded key — must be ignored.
+        (root / "app.py").write_text(
+            'import anthropic\nAPI_KEY = "sk-abcdefghijklmnop1234567890abcdef"\n'
+        )
+        # Dependency manifest — the only thing manifest-only should read.
+        (root / "requirements.txt").write_text("openai==1.2.3\nflask==3.0\n")
+
+        result = GitScanner(repo_path=str(root), manifests_only=True).scan()
+
+        finding_types = {f.type for a in result.assets for f in a.raw_findings}
+        providers = {f.provider for a in result.assets for f in a.raw_findings}
+
+        # Dependency finding from requirements.txt is present...
+        assert FindingType.DEPENDENCY_DETECTED in finding_types
+        assert "openai" in providers
+        # ...but nothing was read from source: no import/key findings.
+        assert FindingType.IMPORT_DETECTED not in finding_types
+        assert FindingType.API_KEY_DETECTED not in finding_types
+        assert "anthropic" not in providers
+
+
 # ── Sprint 1: security regression tests ──────────────────────────────────
 
 

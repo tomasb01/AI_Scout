@@ -75,10 +75,16 @@ def cli():
     help="Bearer token for OpenAI-compatible backends that require auth",
 )
 @click.option("--no-llm", is_flag=True, help="Skip LLM classification")
+@click.option(
+    "--manifests-only",
+    is_flag=True,
+    help="Low-sensitivity scan: read only dependency manifests "
+         "(requirements.txt, package.json, pyproject.toml), never source code",
+)
 def scan(
     repo, local, org, config, token, branch,
     include_archived, include_forks, max_repos, output,
-    llm_url, llm_model, llm_mode, llm_key, no_llm,
+    llm_url, llm_model, llm_mode, llm_key, no_llm, manifests_only,
 ):
     """Scan Git repositories for AI assets."""
     # Build list of repos to scan
@@ -104,8 +110,9 @@ def scan(
         llm_mode = llm_config.get("mode", llm_mode)
         llm_key = llm_config.get("key", llm_key)
 
+    mode_note = "  ·  manifests-only" if manifests_only else ""
     console.print(Panel(
-        f"[bold]Scanning {len(repos)} repositor{'y' if len(repos) == 1 else 'ies'}[/]\n"
+        f"[bold]Scanning {len(repos)} repositor{'y' if len(repos) == 1 else 'ies'}[/]{mode_note}\n"
         f"LLM: {'disabled' if no_llm else f'{llm_mode} ({llm_model})'}",
         title="AI Scout",
         border_style="blue",
@@ -128,6 +135,7 @@ def scan(
                 repo_url=entry.get("url"),
                 branch=entry.get("branch", branch),
                 token=entry.get("token", token),
+                manifests_only=manifests_only,
             )
 
             result = scanner.scan()
@@ -145,16 +153,18 @@ def scan(
 
             progress.remove_task(task)
 
-    # Code context analysis (reads files from repo before cleanup)
-    for result in scan_results:
-        repo_root = result.metadata.get("repo_root")
-        if repo_root and result.assets:
-            analyze_assets(result.assets, repo_root)
+    # Code context analysis (reads files from repo before cleanup).
+    # Skipped in manifests-only mode — it reads source, which that mode avoids.
+    if not manifests_only:
+        for result in scan_results:
+            repo_root = result.metadata.get("repo_root")
+            if repo_root and result.assets:
+                analyze_assets(result.assets, repo_root)
 
-    # Build data flow maps (Step 2 — rule-based, no LLM)
-    for result in scan_results:
-        if result.assets:
-            build_data_flows(result.assets)
+        # Build data flow maps (Step 2 — rule-based, no LLM)
+        for result in scan_results:
+            if result.assets:
+                build_data_flows(result.assets)
 
     # Cleanup cloned repos
     for scanner in scanners:

@@ -302,11 +302,14 @@ class GitScanner(BaseScanner):
         repo_url: str | None = None,
         branch: str = "main",
         token: str | None = None,
+        manifests_only: bool = False,
     ):
         self.repo_path = repo_path
         self.repo_url = repo_url
         self.branch = branch
         self.token = token
+        # Low-sensitivity mode: read only dependency manifests, never source.
+        self.manifests_only = manifests_only
         self._cleanup = None
 
     def cleanup(self):
@@ -337,6 +340,18 @@ class GitScanner(BaseScanner):
             for file_path in self._walk_files(root):
                 files_scanned += 1
                 rel_path = str(file_path.relative_to(root))
+
+                # ── Manifest-only mode: read dependency manifests only ──
+                if self.manifests_only:
+                    if file_path.name in DEPENDENCY_FILES:
+                        content = self._read_file(file_path)
+                        if content is not None:
+                            all_findings.extend(
+                                self._scan_dependencies(
+                                    file_path.name, rel_path, content
+                                )
+                            )
+                    continue
 
                 # ── Local model artifacts — never read content ──
                 if file_path.suffix.lower() in LOCAL_MODEL_EXTENSIONS:
