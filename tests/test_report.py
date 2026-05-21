@@ -116,3 +116,40 @@ def test_no_llm_data():
     gen = ReportGenerator([result])
     ctx = gen._build_context()
     assert ctx["has_llm_data"] is False
+
+
+def test_org_inventory_totals_aggregated():
+    inv = [
+        {"owner": "acme", "total_seen": 40, "scanned": 30,
+         "skipped_archived": 6, "skipped_forks": 4, "skipped_over_limit": 0,
+         "skipped_blocked": 0},
+        {"owner": "globex", "total_seen": 10, "scanned": 8,
+         "skipped_archived": 1, "skipped_forks": 1, "skipped_over_limit": 0,
+         "skipped_blocked": 0},
+    ]
+    gen = ReportGenerator([_make_scan_result()], org_inventory=inv)
+    totals = gen._build_context()["org_inventory_totals"]
+    assert totals["total_seen"] == 50
+    assert totals["scanned"] == 38
+    assert totals["skipped_archived"] == 7
+    assert totals["owners"] == ["acme", "globex"]
+
+
+def test_org_inventory_renders_section():
+    with tempfile.NamedTemporaryFile(suffix=".html", delete=False) as f:
+        output = f.name
+    inv = [{"owner": "acme", "total_seen": 47, "scanned": 35,
+            "skipped_archived": 8, "skipped_forks": 4, "skipped_over_limit": 0,
+            "skipped_blocked": 0}]
+    gen = ReportGenerator([_make_scan_result()], output_path=output, org_inventory=inv)
+    content = Path(gen.generate()).read_text()
+    assert "GitHub Coverage" in content
+    assert "Repos found" in content
+    assert "47" in content
+    Path(output).unlink()
+
+
+def test_no_org_inventory_omits_section():
+    gen = ReportGenerator([_make_scan_result()])
+    ctx = gen._build_context()
+    assert ctx["org_inventory_totals"] is None

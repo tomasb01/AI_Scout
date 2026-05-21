@@ -21,10 +21,12 @@ class ReportGenerator:
         scan_results: list[ScanResult],
         output_path: str = "aiscout_report.html",
         insights: dict[str, AssetInsight] | None = None,
+        org_inventory: list[dict] | None = None,
     ):
         self.scan_results = scan_results
         self.output_path = output_path
         self.insights = insights
+        self.org_inventory = org_inventory or []
         self._env = Environment(
             loader=PackageLoader("aiscout", "report/templates"),
             autoescape=True,
@@ -182,7 +184,19 @@ class ReportGenerator:
             "exec_summary": exec_summary,
             "graph_data": self._build_graph_data(all_assets),
             "repo_urls": repo_urls,
+            "org_inventory": self.org_inventory,
+            "org_inventory_totals": self._org_inventory_totals(),
         }
+
+    def _org_inventory_totals(self) -> dict | None:
+        """Aggregate org enumeration counts across all --org scans."""
+        if not self.org_inventory:
+            return None
+        keys = ("total_seen", "scanned", "skipped_archived",
+                "skipped_forks", "skipped_over_limit", "skipped_blocked")
+        totals = {k: sum(o.get(k, 0) for o in self.org_inventory) for k in keys}
+        totals["owners"] = [o["owner"] for o in self.org_inventory]
+        return totals
 
     def _group_by_category(self, assets: list[AIAsset]) -> dict[str, list[AIAsset]]:
         """Group assets by category for dashboard display."""

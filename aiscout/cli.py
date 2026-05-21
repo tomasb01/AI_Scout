@@ -88,7 +88,7 @@ def scan(
 ):
     """Scan Git repositories for AI assets."""
     # Build list of repos to scan
-    repos = _build_repo_list(
+    repos, org_inventory = _build_repo_list(
         repo, local, org, config, token, branch,
         include_archived=include_archived,
         include_forks=include_forks,
@@ -218,7 +218,10 @@ def scan(
         from aiscout.report.json_export import JSONExporter
         gen = JSONExporter(scan_results, output_path=output, insights=insights)
     else:
-        gen = ReportGenerator(scan_results, output_path=output, insights=insights)
+        gen = ReportGenerator(
+            scan_results, output_path=output, insights=insights,
+            org_inventory=org_inventory,
+        )
     report_path = gen.generate()
 
     # Print summary
@@ -323,8 +326,14 @@ def _build_repo_list(
     include_forks: bool = False,
     max_repos: int = 200,
 ) -> list[dict]:
-    """Build a normalized list of repos from CLI args and/or YAML config."""
+    """Build a normalized list of repos from CLI args and/or YAML config.
+
+    Returns ``(repos, org_inventory)`` — the second element holds one entry
+    per ``--org`` describing what was enumerated vs. scanned vs. skipped, for
+    surfacing in the report.
+    """
     repos = []
+    org_inventory: list[dict] = []
 
     # From CLI --repo flags
     for url in repo_urls:
@@ -334,14 +343,15 @@ def _build_repo_list(
 
     # From CLI --org flags (enumerate all visible repos via GitHub API)
     for org in orgs:
-        repos.extend(
-            _enumerate_org(
-                org, default_token, default_branch,
-                include_archived=include_archived,
-                include_forks=include_forks,
-                max_repos=max_repos,
-            )
+        entries, inventory = _enumerate_org(
+            org, default_token, default_branch,
+            include_archived=include_archived,
+            include_forks=include_forks,
+            max_repos=max_repos,
         )
+        repos.extend(entries)
+        if inventory:
+            org_inventory.append(inventory)
 
     # From CLI --local flags
     for path in local_paths:
@@ -382,7 +392,7 @@ def _build_repo_list(
         except Exception as e:
             console.print(f"[red]Error loading config:[/] {e}")
 
-    return repos
+    return repos, org_inventory
 
 
 def _enumerate_org(
@@ -393,8 +403,12 @@ def _enumerate_org(
     include_archived: bool,
     include_forks: bool,
     max_repos: int,
-) -> list[dict]:
-    """Resolve a GitHub org/user into validated repo entries for the scan loop."""
+) -> tuple[list[dict], dict | None]:
+    """Resolve a GitHub org/user into validated repo entries for the scan loop.
+
+    Returns ``(entries, inventory)`` where ``inventory`` summarizes the
+    enumeration (or ``None`` if it failed entirely).
+    """
     try:
         enum = enumerate_org_repos(
             org, token,
@@ -404,7 +418,7 @@ def _enumerate_org(
         )
     except OrgEnumerationError as e:
         console.print(f"[red]Error enumerating '{org}':[/] {e}")
-        return []
+        return [], None
 
     skipped = []
     if enum.skipped_archived:
@@ -420,16 +434,28 @@ def _enumerate_org(
     )
 
     entries = []
+    blocked = 0
     for item in enum.repos:
         # Run API-provided clone URLs through the same SSRF/scheme guard.
         try:
             item["url"] = _validate_repo_url(item["url"])
         except InputValidationError as e:
             console.print(f"  [yellow]Skipping {item.get('name')}:[/] {e}")
+            blocked += 1
             continue
         item.setdefault("branch", default_branch)
         entries.append(item)
-    return entries
+
+    inventory = {
+        "owner": enum.owner,
+        "total_seen": enum.total_seen,
+        "scanned": len(entries),
+        "skipped_archived": enum.skipped_archived,
+        "skipped_forks": enum.skipped_forks,
+        "skipped_over_limit": enum.skipped_over_limit,
+        "skipped_blocked": blocked,
+    }
+    return entries, inventory
 
 
 def _apply_config_overrides(

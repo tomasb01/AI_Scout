@@ -116,6 +116,18 @@ footer{text-align:center;color:var(--text-dim);font-size:.65rem;margin-top:2rem;
 .exec li::before{content:"";display:inline-block;width:6px;height:6px;border-radius:50%;background:var(--accent);margin-right:.6rem;vertical-align:middle}
 .exec strong{color:#fff}
 
+/* GitHub coverage / org inventory */
+.ghcov{background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:1.2rem 1.5rem;margin-bottom:1.5rem}
+.ghcov h2{font-size:.95rem;font-weight:700;margin-bottom:.3rem;display:flex;align-items:center;gap:.5rem}
+.ghcov h2::before{content:"";display:inline-block;width:4px;height:16px;background:var(--accent);border-radius:2px}
+.ghcov .gh-sub{font-size:.75rem;color:var(--text-muted);margin-bottom:.9rem}
+.ghcov .gh-tiles{display:flex;flex-wrap:wrap;gap:.6rem}
+.ghcov .gh-tile{background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:.7rem 1rem;min-width:96px;text-align:center}
+.ghcov .gh-tile .v{font-size:1.4rem;font-weight:700}
+.ghcov .gh-tile .l{font-size:.68rem;color:var(--text-muted);text-transform:uppercase;letter-spacing:.04em;margin-top:.2rem}
+.ghcov .gh-tile.gh-skip .v{color:var(--text-muted)}
+.ghcov .gh-note{font-size:.72rem;color:var(--text-muted);margin-top:.8rem;line-height:1.5}
+
 /* Overlap section */
 .overlap-card{background:var(--surface);border:1px solid var(--border);border-radius:6px;padding:.8rem 1rem;margin-bottom:.5rem}
 .overlap-card .oc-head{display:flex;justify-content:space-between;align-items:center;margin-bottom:.3rem}
@@ -227,6 +239,28 @@ footer{text-align:center;color:var(--text-dim);font-size:.65rem;margin-top:2rem;
   {% if critical_count > 0 %}<div class="hm-c" style="flex:{{ critical_count }}"></div>{% endif %}
   {% if warning_count > 0 %}<div class="hm-w" style="flex:{{ warning_count }}"></div>{% endif %}
   {% if ok_count > 0 %}<div class="hm-o" style="flex:{{ ok_count }}"></div>{% endif %}
+</div>
+{% endif %}
+
+{# ═══ GITHUB COVERAGE (org enumeration) ═══ #}
+{% if org_inventory_totals %}
+<div class="ghcov">
+  <h2>GitHub Coverage</h2>
+  <div class="gh-sub">
+    Enumerated {{ org_inventory_totals.owners | join(', ') }} via the GitHub API.
+  </div>
+  <div class="gh-tiles">
+    <div class="gh-tile"><div class="v">{{ org_inventory_totals.total_seen }}</div><div class="l">Repos found</div></div>
+    <div class="gh-tile"><div class="v">{{ org_inventory_totals.scanned }}</div><div class="l">Scanned</div></div>
+    {% if org_inventory_totals.skipped_archived %}<div class="gh-tile gh-skip"><div class="v">{{ org_inventory_totals.skipped_archived }}</div><div class="l">Archived</div></div>{% endif %}
+    {% if org_inventory_totals.skipped_forks %}<div class="gh-tile gh-skip"><div class="v">{{ org_inventory_totals.skipped_forks }}</div><div class="l">Forks</div></div>{% endif %}
+    {% if org_inventory_totals.skipped_over_limit %}<div class="gh-tile gh-skip"><div class="v">{{ org_inventory_totals.skipped_over_limit }}</div><div class="l">Over limit</div></div>{% endif %}
+    {% if org_inventory_totals.skipped_blocked %}<div class="gh-tile gh-skip"><div class="v">{{ org_inventory_totals.skipped_blocked }}</div><div class="l">Blocked</div></div>{% endif %}
+  </div>
+  <div class="gh-note">
+    Only repositories the access token is authorized to see are listed. Private repositories
+    outside the token's scope are invisible to the API and not reflected in these counts.
+  </div>
 </div>
 {% endif %}
 
