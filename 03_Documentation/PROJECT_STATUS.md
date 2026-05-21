@@ -1,67 +1,80 @@
 # AI Scout — Project Status & Documentation
 
-**Last updated: May 3, 2026 | Version: 0.7.0-dev + Sprinty 1–5**
+**Last updated: May 21, 2026 | Version: 0.7.0 | Sprints 1–5 completed**
 
-> Detailní log pěti sprintů (12. 4. – 3. 5. 2026): viz **[SPRINT_LOG.md](SPRINT_LOG.md)** (116 testů, security hardening, Data Flow Mapper, LLM e2e validace, risk rework, CI/CD scanner, dep advisories, report redesign prototypy).
+> Detailní log sprintů: viz **[SPRINT_LOG.md](SPRINT_LOG.md)** (116 testů, security hardening, Data Flow Mapper, LLM e2e validace, risk rework, CI/CD scanner, dep advisories, report redesign prototypy).
 
 ---
 
 ## What AI Scout Is
 
-AI Scout is a self-hosted, open-source tool that automatically discovers, maps, and assesses all AI solutions in an organization's Git repositories. It scans code for AI integrations (imports, API keys, dependencies), analyzes what each solution does through deep code analysis, and generates an interactive HTML report with executive summary, risk assessment, overlap detection, and visual analytics.
+AI Scout is a self-hosted, open-source tool that automatically discovers, maps, and assesses all AI solutions in an organization's Git repositories. It scans code for AI integrations (imports, API keys, dependencies), analyzes what each solution does through deep code analysis, builds data flow maps (sources → processing → sinks), and generates an interactive HTML report with executive summary, risk assessment, overlap detection, and visual analytics.
 
 **Motto:** Visibility. Efficiency. Security.
 
 ---
 
-## What's Been Built (v0.1 → v0.6)
+## What's Been Built (v0.1 → v0.7)
 
 ### Core Engine
 
 | Component | File | Status | Description |
 |-----------|------|--------|-------------|
-| **Git Scanner** | `aiscout/scanners/git_scanner.py` | ✅ Done | Clones repos, detects AI imports (18+ providers), API keys (with redaction), dependencies. Groups findings by solution directory. Extracts git authors. |
-| **Scanner Base** | `aiscout/scanners/base.py` | ✅ Done | Abstract base class for future scanners (M365, Network/DNS, etc.) |
-| **Code Context Extractor** | `aiscout/engine/code_analyzer.py` | ✅ Done | Python AST parsing + regex fallback for JS/TS. Extracts functions, classes, API calls, system prompts, data sources/sinks, env vars, LLM model names. Reads ALL files in solution directory + README.md. |
-| **LLM Engine** | `aiscout/engine/llm.py` | ✅ Done | Ollama + OpenAI-compatible API modes. Prompt includes full code context (functions, prompts, API calls, data flows). Health check, batch classify, rate limiting, graceful fallback. Default model: qwen2.5-coder:7b. |
-| **Enrichment** | `aiscout/engine/enrichment.py` | ✅ Done | Solution naming (from code purpose, not framework), category classification (7 categories), tech stack extraction, data involved detection, risk reasoning with specific explanations, recommendations, overlap detection. |
-| **Provider Knowledge Base** | `aiscout/knowledge/providers.py` | ✅ Done | 30+ AI provider profiles: display name, vendor, data residency, training policy, certifications, free tier risk, enterprise notes. |
-| **Data Flow Mapper** | `aiscout/engine/data_flow.py` | ✅ Done (Sprint 5) | Rule-based sources→steps→sinks construction from CodeContext. DataFlowMap, FlowSource, FlowSink models. No LLM needed. |
-| **Dependency Advisories** | `aiscout/knowledge/dependency_advisories.py` | ✅ Done (Sprint 3) | Offline KB: openai<1.0, langchain<0.1, transformers<4.36, llama-index<0.10, chromadb<0.4, gradio<4.0. |
-| **Data Model** | `aiscout/models/assets.py` | ✅ Done | Pydantic models: AIAsset (with data_flow, task_types, tags), CodeContext, DataFlowMap, FlowSource, FlowSink, Finding, ProviderInfo, ClassificationResult. |
+| **Git Scanner** | `scanners/git_scanner.py` | ✅ | Clones repos (depth=10), detects AI imports (18+ providers), API keys (redacted), dependencies. Groups by solution directory. Git author extraction. Security: GIT_ASKPASS, symlink guard, path traversal protection. |
+| **Scanner Base** | `scanners/base.py` | ✅ | Abstract base class for future scanners (M365, Network/DNS, etc.) |
+| **Code Context Extractor** | `engine/code_analyzer.py` | ✅ | Python AST parsing + regex fallback for JS/TS. Extracts functions, classes, API calls, system prompts, data sources/sinks, env vars, LLM model names. Reads ALL files in solution dir + README.md. |
+| **Data Flow Mapper** | `engine/data_flow.py` | ✅ Sprint 5 | Rule-based DataFlowMap builder (706 lines). Sources → processing steps → sinks from CodeContext. Data category detection, confidence scoring, solution purpose synthesis. No LLM required. |
+| **LLM Engine** | `engine/llm.py` | ✅ | Ollama + any OpenAI-compatible endpoint (vLLM, LocalAI, TGI, Groq). Prompt injection defense (`<untrusted>` tags). API keys replaced with `<REDACTED_API_KEY>`. Health check, batch classify, rate limiting. Default: qwen2.5-coder:7b. |
+| **Enrichment** | `engine/enrichment.py` | ✅ | Solution naming from code purpose. Category classification (7 categories). Tech stack extraction with deduplication (model suppresses provider). Data involved detection. Risk reasoning. Task type detection (inference/training/fine_tuning). Tags. Overlap detection via DataFlowMap fingerprinting. |
+| **Provider KB** | `knowledge/providers.py` | ✅ | 30+ provider profiles: OpenAI, Anthropic, Google, Mistral, Cohere, HuggingFace, LangChain, LlamaIndex, Ollama, ChromaDB, Pinecone, Qdrant, Weaviate, AWS Bedrock, Azure OpenAI, CrewAI, AutoGen, Semantic Kernel, DSPy, Instructor, Outlines, FAISS, Fireworks, Guidance, Replicate, Together, Groq. |
+| **Dependency Advisories** | `knowledge/dependency_advisories.py` | ✅ Sprint 3 | Offline KB for known vulnerable AI package versions. |
+| **Data Model** | `models/assets.py` | ✅ | AIAsset (with data_flow, task_types, tags, code_contexts), DataFlowMap, FlowSource, FlowSink, CodeContext, TaskType enum, Finding, ProviderInfo, ClassificationResult, ScanResult. |
 
 ### Report & Visualization
 
 | Component | File | Status | Description |
 |-----------|------|--------|-------------|
-| **HTML Report** | `aiscout/report/html.py` + `templates/report.html.j2` | ✅ Done | Self-contained dark-theme dashboard. |
-| **Executive Summary** | In report | ✅ Done | Auto-generated bullet points: total solutions, overlaps, data egress to US, SPOF authors, tech concentration, sensitive data. |
-| **AI Solutions Map** | In report (canvas JS) | ✅ Done | Force-directed graph with 3 views (Solutions/Tech Stack/People). Category clusters with background circles. Sidebar filter. Draggable nodes. Overlap edges (orange) + tech edges (purple). |
-| **Analytics** | In report | ✅ Done | Collapsible section: Tech Stack radar (bar chart), Data Types Processed (sensitivity heatmap), Author Coverage (SPOF detection), Functional Overlap (expandable cards with file paths + consolidation recommendation). |
-| **Solutions Table** | In report | ✅ Done | Columns: Solution, Repo, Built On, Author, Data Involved, Risk + compliance flags (PII, FIN, US). Click to expand detail: risk analysis, recommendations, provider info, findings, GitHub links. |
+| **HTML Report** | `report/html.py` + `templates/report.html.j2` | ✅ | Self-contained dark-theme dashboard. No external dependencies. |
+| **Executive Summary** | In report | ✅ | Auto-generated: total solutions, overlaps, data egress, SPOF authors, tech concentration, sensitive data. |
+| **AI Solutions Map** | In report (canvas) | ✅ | Force-directed graph, 3 views (Solutions/Tech Stack/People). Category clusters with backgrounds. Sidebar filter. Draggable. Overlap edges (orange) + tech edges (purple). |
+| **Data Flow** | In report detail | ✅ Sprint 5 | Per-solution: Sources (green), Processing Steps (blue), Destinations (red). |
+| **Analytics** | In report | ✅ | Collapsible: Tech Stack radar, Data Types Processed, Author Coverage (SPOF), Functional Overlap (expandable). |
+| **Solutions Table** | In report | ✅ | Solution, Repo, Built On, Author, Data Involved, Risk + compliance flags (PII, FIN, US). Click to expand detail with GitHub links. |
+| **JSON Export** | `report/json_export.py` | ✅ | Auto-detected from .json extension. Full structured output with DataFlowMap fingerprint-based overlap detection. |
 
 ### Web UI & Deployment
 
 | Component | File | Status | Description |
 |-----------|------|--------|-------------|
-| **Web UI** | `aiscout/web/app.py` + `templates/index.html` | ✅ Done | FastAPI 3-step wizard: Repositories → LLM Config (No LLM / Ollama / API Key) → Scan with real-time SSE progress. Report rendered inline. |
-| **Landing Page** | `landing/index.html` + `landing/screenshots/` | ✅ Done | Sales pitch: hero, screenshots, role-based benefits (CEO → CTO → DevOps → CISO), features, pricing (Free / Pro TBA), CTA. |
-| **CLI** | `aiscout/cli.py` | ✅ Done | `aiscout scan` (multi-repo, YAML config, LLM options) + `aiscout web` (start web server). |
-| **Docker** | `Dockerfile` + `docker-compose.yml` | ✅ Done | Python 3.12-slim + git. Default: `aiscout web --port 8080`. |
-| **Vercel** | `api/index.py` + `vercel.json` | ⚠️ Partial | Landing page works, scan doesn't (no git binary on Vercel serverless). |
+| **Web UI** | `web/app.py` + `templates/index.html` | ✅ | FastAPI 3-step wizard: Repositories → LLM Config (No LLM / Ollama / API Key) → Scan with SSE progress. Data Flow integrated in pipeline. |
+| **Landing Page** | `landing/index.html` + screenshots/ | ✅ | Sales pitch with screenshots, role-based benefits (CEO → CTO → DevOps → CISO), pricing (Free / Pro TBA). |
+| **CLI** | `cli.py` | ✅ | `aiscout scan` (multi-repo, YAML config, LLM options, .html/.json auto-detect) + `aiscout web`. |
+| **Docker** | `Dockerfile` + `docker-compose.yml` | ✅ | Python 3.12-slim + git + landing. Default: `aiscout web --port 8080`. |
+
+### Security (Sprint 1)
+
+- API keys never stored raw — always redacted in Finding, `<REDACTED_API_KEY>` in LLM prompts
+- Git tokens via GIT_ASKPASS helper, not URL embedding
+- Symlinks skipped, path traversal blocked (`resolved.relative_to(root)`)
+- Temp dirs: `TemporaryDirectory` + `chmod 0700`
+- CLI input validation: URL scheme whitelist, SSRF block, system path block
+- LLM prompt injection defense: `<untrusted>` tags + sanitization
 
 ### Tests
 
-| File | Tests | What it covers |
-|------|-------|----------------|
-| `tests/test_models.py` | 8 | UUID generation, merge, enum serialization |
-| `tests/test_git_scanner.py` | 10 | Import/key/dependency detection, file walking, grouping |
-| `tests/test_code_analyzer.py` | 9 | AST parsing, prompts, API calls, DB operations, JS analysis |
-| `tests/test_llm_engine.py` | 7 | Ollama/OpenAI mock calls, parse failure, health check, truncation |
-| `tests/test_enrichment.py` | 8 | Summary generation, risk scoring, categories, provider KB |
-| `tests/test_report.py` | 5 | HTML generation, risk counts, overlap, empty scan |
-| `tests/test_cli.py` | 4 | Version, no repos error, local scan, YAML config |
-| **Total** | **51** | All passing |
+| File | Count | Coverage |
+|------|-------|----------|
+| `test_models.py` | 8 | Models, UUID, merge, enums |
+| `test_git_scanner.py` | ~14 | Imports, keys, deps, grouping, symlink guard, path traversal |
+| `test_code_analyzer.py` | 9 | AST, prompts, API calls, DB ops, JS, end-to-end |
+| `test_llm_engine.py` | ~10 | Ollama/OpenAI mock, parse failure, sanitization, prompt injection |
+| `test_enrichment.py` | ~14 | Summary, risk, categories, task_type, tags, MCP |
+| `test_data_flow.py` | 9 | DataFlowMap construction, sources, sinks, steps |
+| `test_report.py` | 5 | HTML/JSON generation, risk counts, overlap |
+| `test_cli.py` | ~8 | Version, scan, YAML config, URL/path validation |
+| `test_dependency_advisories.py` | ~4 | Advisory matching |
+| `test_regression.py` | ~7 | Golden snapshot baselines (stable + volatile) |
+| **Total** | **116** | All passing |
 
 ---
 
@@ -81,21 +94,23 @@ AI Scout is a self-hosted, open-source tool that automatically discovers, maps, 
                        ▼
 ┌─────────────────────────────────────────────────────┐
 │              ANALYSIS ENGINE                         │
-│  LLM Engine (Ollama/OpenAI) → Enrichment             │
-│  Provider Knowledge Base (30+ providers)              │
+│  Data Flow Mapper (rule-based, Sprint 5)             │
+│  LLM Engine (Ollama/OpenAI, optional enrichment)     │
+│  Enrichment (risk, categories, tech stack, overlap)  │
+│  Provider KB (30+ profiles) + Dep Advisories         │
 └──────────────────────┬──────────────────────────────┘
                        ▼
 ┌─────────────────────────────────────────────────────┐
 │              OUTPUT ENGINE                           │
-│  HTML Report (graph, analytics, exec summary)        │
-│  (future: JSON/CSV export, dashboard)                │
+│  HTML Report (graph, data flow, analytics)           │
+│  JSON Export (structured, DataFlowMap fingerprints)   │
 └─────────────────────────────────────────────────────┘
 ```
 
 Architecture documents: `02_Architecture/`
 - `00_System_Overview.md` — high-level system view
 - `01_Git_Scanner_MVP.md` — Git Scanner architecture
-- `02_Data_Flow_Mapper.md` — Data Flow Mapper design (not yet implemented)
+- `02_Data_Flow_Mapper.md` — Data Flow Mapper design
 
 ---
 
@@ -103,14 +118,16 @@ Architecture documents: `02_Architecture/`
 
 | Version | Date | Key Changes |
 |---------|------|-------------|
-| v0.1.0 | Apr 11 | MVP: Git Scanner, LLM Engine, HTML Report, CLI, 42 tests |
+| v0.1.0 | Apr 11 | MVP: Git Scanner, LLM Engine, HTML Report, CLI |
 | v0.2.0 | Apr 11 | Code Context Extractor (AST parsing, prompt extraction) |
-| v0.3.0 | Apr 11 | Directory-based grouping, solution-focused dashboard, categories |
-| v0.4.0 | Apr 11 | Graph visualization, exec summary, analytics, overlap detection |
-| v0.4.1 | Apr 11 | LLM prompt with full code context, default qwen2.5-coder:7b |
-| v0.5.0 | Apr 11 | Web UI (FastAPI wizard), repo column, graph improvements |
+| v0.3.0 | Apr 11 | Directory-based grouping, solution-focused dashboard |
+| v0.4.0 | Apr 11 | Graph visualization, exec summary, analytics, overlap |
+| v0.4.1 | Apr 11 | LLM prompt with full code context |
+| v0.5.0 | Apr 11 | Web UI (FastAPI wizard), repo column |
 | v0.5.1 | Apr 11 | Docker deployment ready |
-| v0.6.0 | Apr 11 | Landing page with screenshots, role-based benefits |
+| v0.6.0 | Apr 11 | Landing page with screenshots |
+| v0.6.x | Apr 12-15 | Sprints 1-4: security, task_types, MCP, dep advisories, CI/CD, LLM e2e |
+| **v0.7.0** | **Apr 20** | **Sprint 5: Data Flow Mapper, DataFlowMap models, overlap fingerprinting, 116 tests** |
 
 ---
 
@@ -118,21 +135,25 @@ Architecture documents: `02_Architecture/`
 
 ### Local (development)
 ```bash
-# Install
 uv sync
 
-# CLI scan
+# CLI scan (no LLM)
 uv run aiscout scan --repo https://github.com/org/repo --no-llm --output report.html
 
-# CLI scan with LLM
+# CLI scan (JSON export)
+uv run aiscout scan --repo https://github.com/org/repo --no-llm --output report.json
+
+# CLI scan (with Ollama LLM)
 uv run aiscout scan --repo https://github.com/org/repo --llm-model qwen2.5-coder:7b --output report.html
+
+# CLI scan (with OpenAI-compatible API)
+uv run aiscout scan --repo https://github.com/org/repo --llm-mode openai --llm-url https://api.openai.com --llm-key sk-... --llm-model gpt-4o-mini --output report.html
 
 # Web UI
 uv run aiscout web --port 8080
-# Open http://localhost:8080
 
 # Tests
-uv run pytest tests/ -v
+uv run pytest tests/ -q
 ```
 
 ### Docker (production)
@@ -140,55 +161,36 @@ uv run pytest tests/ -v
 git clone https://github.com/tomasb01/AI_Scout.git
 cd AI_Scout
 docker compose up -d
-# Open http://<server-ip>:8080
+# Landing: http://<server-ip>:8080
+# Scanner: http://<server-ip>:8080/app
 ```
 
 ---
 
 ## What's NOT Built Yet — Next Steps
 
-### Priority 1: LLM Integration Testing
-- **What:** End-to-end test with real Ollama (qwen2.5-coder:7b)
-- **Why:** Code is ready but Ollama was crashing during session. LLM will dramatically improve solution descriptions.
-- **Effort:** Small — just needs working Ollama instance
-- **Impact:** Highest — descriptions go from "Stock Price & Dividend Date" to detailed paragraph about what the solution does
+### Priority 0: Report redesign
+- 3 HTML prototypes in `prototypes/` (A: Executive Dashboard, B: Data Flow First, C: Risk-Action Focused)
+- Current report doesn't fully reflect Sprint 5 Data Flow capabilities
+- Awaiting variant selection
 
-### Priority 2: Data Flow Mapper
-- **What:** Implement `aiscout/engine/data_flow.py` — builds source → processing → sink model for each solution
-- **Why:** Currently we extract code context but don't visualize data flows
-- **Architecture:** Already designed in `02_Architecture/02_Data_Flow_Mapper.md`
-- **Effort:** Medium
-- **Impact:** High — shows exactly what data goes where
+### Priority 1: Risk scoring calibration
+- Sprint 3 reworked scoring, tested on 2 repos, needs 3-5 more diverse repos
 
-### Priority 3: GitHub API Scanner (alternative to git clone)
-- **What:** Scanner that uses GitHub REST API instead of `git clone`
-- **Why:** Works on serverless (Vercel), faster for large repos, no git binary needed
-- **Effort:** Medium
-- **Impact:** Medium — enables cloud deployment without Docker
+### Priority 2: Instrumentovaná exekuce (Phase 2 per prod spec)
+- LLM instruments code (WRITE→log), Docker sandbox, classifies actual data
+- Prerequisite: DataFlowMap (done) identifies READ/WRITE ops
+- For enterprises without Docker: Customer-executed script fallback (vrstva 3)
 
-### Priority 4: JSON/CSV Export
-- **What:** Machine-readable output alongside HTML report
-- **Why:** Integration with SIEM, compliance tools, dashboards
-- **Effort:** Small
-- **Impact:** Medium
+### Priority 3: GitHub API Scanner
+- REST API instead of git clone, works on serverless (Vercel)
 
-### Priority 5: M365 / Entra ID Scanner
-- **What:** Scan OAuth app registrations, enterprise apps, AI-related consent grants
-- **Why:** Covers commercial SaaS AI tools (ChatGPT, Copilot) that Git scanner can't see
-- **Effort:** Large — requires Microsoft Graph API integration
-- **Impact:** High — biggest coverage gap
+### Priority 4: Docker deployment on external server
+- Dockerfile ready, untested on remote
 
-### Priority 6: Continuous Monitoring (Watch Mode)
-- **What:** Background service that re-scans periodically, detects new AI tools
-- **Why:** One-time scan becomes outdated
-- **Effort:** Medium
-- **Impact:** Medium — Pro tier feature
+### Priority 5: Enterprise scanners (M365/Entra ID, Network/DNS, Endpoint)
 
-### Priority 7: Security Assessment Module
-- **What:** Deep security analysis — input sanitization, prompt injection checks, access control review
-- **Why:** Pro tier value proposition
-- **Effort:** Large
-- **Impact:** High — Pro tier feature
+### Priority 6: Pro tier (Continuous Monitoring, Security Assessment, Remediation Roadmap)
 
 ---
 
@@ -196,37 +198,43 @@ docker compose up -d
 
 ```
 AI_Scout/
-├── 01_Prod_specs/                    # Product specification (v7)
-├── 02_Architecture/                  # Architecture documents
+├── 01_Prod_specs/                    # Product specification (v8)
+├── 02_Architecture/
 │   ├── 00_System_Overview.md
 │   ├── 01_Git_Scanner_MVP.md
 │   └── 02_Data_Flow_Mapper.md
 ├── 03_Documentation/
-│   └── PROJECT_STATUS.md             # ← THIS FILE
+│   ├── PROJECT_STATUS.md             # ← THIS FILE
+│   └── SPRINT_LOG.md                 # Sprint-by-sprint detail
 ├── aiscout/
-│   ├── cli.py                        # CLI commands (scan, web)
+│   ├── cli.py                        # CLI (scan, web)
 │   ├── engine/
-│   │   ├── code_analyzer.py          # AST parser + regex extractor
+│   │   ├── code_analyzer.py          # AST + regex extractor
+│   │   ├── data_flow.py              # Data Flow Mapper (Sprint 5)
 │   │   ├── enrichment.py             # Risk, summary, categories, overlap
-│   │   └── llm.py                    # Ollama + OpenAI LLM client
+│   │   └── llm.py                    # LLM client (Ollama/OpenAI)
 │   ├── knowledge/
-│   │   └── providers.py              # 30+ provider profiles
+│   │   ├── providers.py              # 30+ provider profiles
+│   │   └── dependency_advisories.py  # Vulnerable version KB
 │   ├── models/
-│   │   └── assets.py                 # Pydantic data models
+│   │   └── assets.py                 # Pydantic models (AIAsset, DataFlowMap, ...)
 │   ├── report/
-│   │   ├── html.py                   # Report generator + analytics
+│   │   ├── html.py                   # HTML report generator
+│   │   ├── json_export.py            # JSON export
 │   │   └── templates/report.html.j2  # Dashboard template
 │   ├── scanners/
 │   │   ├── base.py                   # Scanner ABC
-│   │   └── git_scanner.py            # Git repository scanner
+│   │   └── git_scanner.py            # Git scanner
 │   └── web/
 │       ├── app.py                    # FastAPI server
-│       └── templates/index.html      # Scanner wizard UI
+│       └── templates/index.html      # Scanner wizard
 ├── landing/
-│   ├── index.html                    # Sales landing page
+│   ├── index.html                    # Landing page
 │   └── screenshots/                  # Demo screenshots
-├── tests/                            # 116 tests (Sprinty 1–5)
-├── Dockerfile                        # Docker deployment
+├── prototypes/                       # Report redesign variants A/B/C
+├── scripts/                          # Helper scripts
+├── tests/                            # 116 tests
+├── Dockerfile
 ├── docker-compose.yml
 ├── pyproject.toml
 └── README.md
@@ -236,14 +244,12 @@ AI_Scout/
 
 ## Key Decisions Made
 
-1. **Directory-based grouping over provider-based** — each directory with AI code = one solution. Shows 136 individual solutions instead of 7 provider groups.
-
-2. **Solution names from code, not framework** — "Stock Price & Dividend Date" instead of "OpenAI Integration". Uses README → prompts → function names → directory as fallback chain.
-
-3. **Rule-based analysis first, LLM as enrichment** — works without LLM (--no-llm), LLM only improves descriptions. No hard dependency on external services.
-
-4. **Self-contained HTML report** — no external dependencies, opens offline, all CSS/JS inline. Graph uses canvas, not D3.js.
-
-5. **Default model qwen2.5-coder:7b** — fits 8 GB RAM, good code understanding, reliable JSON output.
-
-6. **Lazy imports for serverless** — GitPython imported only when scanning, not at startup. Enables Vercel landing page.
+1. **Directory-based grouping** — each directory with AI code = one solution (not provider-based)
+2. **Solution names from code purpose** — README → prompts → function names → directory
+3. **Tech stack deduplication** — model name suppresses provider (GPT-4o → removes "OpenAI" tag)
+4. **Overlap via DataFlowMap fingerprinting** — same sinks + same data categories = overlap
+5. **Rule-based first, LLM as enrichment** — works without LLM, no hard dependency
+6. **Self-contained HTML report** — no CDN, all inline, opens offline
+7. **Default model qwen2.5-coder:7b** — fits 8 GB RAM
+8. **Lazy imports** — GitPython only on scan, enables Vercel landing
+9. **Security by default** — key redaction, prompt injection defense, symlink guard, SSRF protection
