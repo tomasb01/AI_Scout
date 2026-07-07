@@ -200,7 +200,7 @@ API keys never stored raw (redacted in `Finding`, `<REDACTED_API_KEY>` in prompt
 
 ## Project conventions
 
-- Product spec: `01_Prod_specs/AI_Scout_Product_Spec_v10.docx` (latest)
+- Product spec: `01_Prod_specs/AI_Scout_Product_Spec_v13.docx` (latest) + `AI_Scout_Vyvojovy_plan.docx` (sprint companion)
 - Architecture: `02_Architecture/`
 - Status / sprint log: `03_Documentation/`
 - Primary language for code/docs: English · Product spec language: Czech
