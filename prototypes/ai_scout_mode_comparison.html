@@ -1,0 +1,263 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>AI Scout — Static analysis vs. LLM-enriched analysis</title>
+<style>
+:root{--bg:#0a0c10;--surface:#12151c;--surface2:#1a1e28;--surface3:#222738;--border:#2a2f42;--text:#e4e8f4;--text-muted:#8892aa;--text-dim:#5a6280;--accent:#6366f1;--accent-bg:rgba(99,102,241,.1);--ok:#22c55e;--ok-bg:rgba(34,197,94,.08);--warning:#f59e0b;--warning-bg:rgba(245,158,11,.08);--critical:#ef4444;--critical-bg:rgba(239,68,68,.08);--blue:#3b82f6;--purple:#a78bfa;--mono:'SF Mono',ui-monospace,'Cascadia Code',Menlo,monospace}
+*{margin:0;padding:0;box-sizing:border-box}
+body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',system-ui,sans-serif;background:var(--bg);color:var(--text);line-height:1.55}
+.wrap{max-width:1160px;margin:0 auto;padding:3rem 2rem 4rem}
+code,.mono{font-family:var(--mono)}
+
+/* Hero */
+.hero{text-align:center;margin-bottom:3rem}
+.hero .eyebrow{font-size:.7rem;font-weight:700;letter-spacing:.14em;text-transform:uppercase;color:var(--accent);margin-bottom:.8rem}
+.hero h1{font-size:2.1rem;font-weight:800;line-height:1.2}
+.hero h1 em{font-style:normal;color:var(--accent)}
+.hero p{max-width:640px;margin:1rem auto 0;color:var(--text-muted);font-size:.95rem}
+
+/* Mode column headers */
+.mode-heads{display:grid;grid-template-columns:1fr 1fr;gap:1rem;margin-bottom:.8rem;position:sticky;top:0;z-index:50;padding:.6rem 0;background:var(--bg)}
+.mode-head{border-radius:10px;padding:.7rem 1rem;text-align:center;border:1px solid var(--border);background:var(--surface)}
+.mode-head .nm{font-weight:800;font-size:.9rem}
+.mode-head .sub{font-size:.66rem;color:var(--text-muted);margin-top:.15rem}
+.mode-head.llm{border-color:rgba(99,102,241,.45);background:linear-gradient(180deg,rgba(99,102,241,.08),var(--surface))}
+.mode-head.llm .nm{color:var(--accent)}
+
+/* Comparison sections */
+.cmp{margin-bottom:2.6rem}
+.cmp-title{font-size:.72rem;font-weight:700;text-transform:uppercase;letter-spacing:.09em;color:var(--text-muted);margin-bottom:.3rem}
+.cmp-lead{font-size:.8rem;color:var(--text-dim);margin-bottom:.9rem;max-width:760px}
+.cols{display:grid;grid-template-columns:1fr 1fr;gap:1rem;align-items:stretch}
+.card{background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:1.1rem 1.2rem}
+.card.llm{border-color:rgba(99,102,241,.4)}
+.added{position:relative}
+.added::before{content:"+ LLM";position:absolute;top:-.55rem;right:.7rem;font-size:.55rem;font-weight:800;letter-spacing:.05em;background:var(--accent);color:#fff;padding:.1rem .4rem;border-radius:3px}
+
+/* Provenance + risk badges */
+.prov{font-size:.55rem;font-weight:700;letter-spacing:.04em;padding:.1rem .35rem;border-radius:3px;white-space:nowrap;vertical-align:middle}
+.prov.det{background:var(--surface3);color:var(--text-dim);border:1px solid var(--border)}
+.prov.llm{background:var(--accent-bg);color:var(--accent);border:1px solid rgba(99,102,241,.35)}
+.risk{font-size:.6rem;font-weight:700;padding:.1rem .42rem;border-radius:4px}
+.risk.crit{background:var(--critical-bg);color:var(--critical)}
+
+/* Solution snippet */
+.sname{font-weight:700;font-size:.92rem}
+.sname .conf{font-size:.62rem;color:var(--text-dim);font-weight:400}
+.factstrip{font-family:var(--mono);font-size:.7rem;line-height:1.9;background:var(--surface2);border-radius:8px;padding:.65rem .85rem;margin-top:.6rem}
+.factstrip .k{color:var(--text-dim);display:inline-block;width:72px}
+.factstrip .reg{color:var(--warning)}
+.narr{font-size:.8rem;color:var(--text-muted);margin-top:.55rem;line-height:1.6}
+.narr b{color:var(--text)}
+.qa-note{font-size:.63rem;color:var(--text-dim);background:var(--surface2);border:1px dashed var(--border);border-radius:6px;padding:.45rem .65rem;margin-top:.6rem}
+.qa-note code{color:var(--warning)}
+
+/* Tags */
+.dtag{display:inline-block;font-size:.6rem;padding:.1rem .35rem;border-radius:3px;background:rgba(167,139,250,.12);color:var(--purple);margin:.1rem .15rem .1rem 0}
+.dtag .c{color:var(--text-dim);font-size:.55rem}
+.dtag.weak{opacity:.55}
+
+/* Insight rows */
+.insight{display:flex;gap:.6rem;align-items:flex-start;padding:.42rem 0;border-bottom:1px solid var(--border);font-size:.78rem}
+.insight:last-child{border:none}
+.insight .sev{min-width:7px;height:7px;border-radius:50%;margin-top:.45rem}
+.sev.warn{background:var(--warning)}.sev.info{background:var(--blue)}.sev.crit{background:var(--critical)}
+.insight .body{flex:1;color:var(--text-muted)}
+.insight b{color:var(--text)}
+.insight.dim{opacity:.45}
+
+/* Request body structure */
+.payload{font-family:var(--mono);font-size:.68rem;background:var(--surface2);border-radius:8px;padding:.65rem .85rem;line-height:1.8;color:var(--text-muted)}
+.payload .f{color:var(--text)}
+.payload .pii{color:var(--critical);font-weight:700}
+.payload .cm{color:var(--text-dim)}
+
+/* Identical strip */
+.identical{background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:1rem 1.3rem;display:flex;gap:1rem;align-items:center;margin-bottom:2.6rem}
+.identical .eq{font-size:1.5rem;font-weight:800;color:var(--ok)}
+.identical .tx{font-size:.8rem;color:var(--text-muted)}
+.identical .tx b{color:var(--text)}
+
+/* Capability table */
+.captable{width:100%;border-collapse:collapse;font-size:.78rem}
+.captable th{text-align:left;font-size:.62rem;text-transform:uppercase;letter-spacing:.06em;color:var(--text-muted);padding:.5rem .6rem;border-bottom:2px solid var(--border)}
+.captable td{padding:.55rem .6rem;border-bottom:1px solid var(--border);vertical-align:top}
+.yes{color:var(--ok);font-weight:700}
+.part{color:var(--warning);font-weight:600}
+.captable .note{font-size:.66rem;color:var(--text-dim)}
+
+/* Trust strip */
+.trust{display:grid;grid-template-columns:repeat(3,1fr);gap:1rem;margin-top:2.4rem}
+.trust .t{background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:1rem 1.1rem;font-size:.74rem;color:var(--text-muted)}
+.trust .t b{display:block;color:var(--text);margin-bottom:.25rem;font-size:.8rem}
+
+.footer{text-align:center;margin-top:3rem;padding-top:1.4rem;border-top:1px solid var(--border);color:var(--text-dim);font-size:.68rem;line-height:1.9}
+.footer .peri{color:var(--ok)}
+
+@media (max-width:860px){.cols,.mode-heads,.trust{grid-template-columns:1fr}.mode-heads{position:static}}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<!-- ============ HERO ============ -->
+<div class="hero">
+  <div class="eyebrow">AI Scout · Analysis modes</div>
+  <h1>Same scan. Same evidence.<br><em>Two depths of understanding.</em></h1>
+  <p>Scout's deterministic engine finds every AI integration, key, and data flow — identically in both modes. The optional LLM layer (local Ollama or your private API endpoint) adds understanding on top: what each solution is, what it's for, and what data really flows through it. Nothing leaves your perimeter in either mode.</p>
+</div>
+
+<!-- ============ STICKY MODE HEADERS ============ -->
+<div class="mode-heads">
+  <div class="mode-head"><div class="nm">Static analysis</div><div class="sub">deterministic · zero dependencies · audit-grade</div></div>
+  <div class="mode-head llm"><div class="nm">+ LLM analysis</div><div class="sub">local model or your private endpoint · adds interpretation</div></div>
+</div>
+
+<!-- ============ WHAT'S IDENTICAL ============ -->
+<div class="identical">
+  <div class="eq">=</div>
+  <div class="tx"><b>Identical in both modes:</b> every finding (keys, imports, endpoints, file:line evidence), provider detection, exit-point map, owner attribution, and all counts. The LLM never decides <i>whether</i> something exists — only helps explain <i>what it is</i>. Every LLM-derived field is labeled <span class="prov llm">LLM</span> and carries a confidence score.</div>
+</div>
+
+<!-- ============ 1. SOLUTION UNDERSTANDING ============ -->
+<div class="cmp">
+  <div class="cmp-title">1 · What is this solution?</div>
+  <div class="cmp-lead">Static mode reports verified facts and refuses to guess. LLM mode reads the code and writes the inventory entry a human would write.</div>
+  <div class="cols">
+    <div class="card">
+      <div class="sname">Fine-tuning pipeline <span class="risk crit">CRITICAL</span></div>
+      <div class="factstrip">
+        <div><span class="k">Sources</span>database (SQL)</div>
+        <div><span class="k">Sinks</span>Hugging Face Inference API <span class="reg">(US)</span></div>
+        <div><span class="k">Pattern</span>fine-tuning pipeline</div>
+        <div><span class="k">Tech</span>transformers, PEFT</div>
+      </div>
+      <div class="qa-note">Narrative summary not available in static mode — structured facts only. <code>QA-guarded:</code> raw code strings never appear in prose.</div>
+    </div>
+    <div class="card llm added">
+      <div class="sname">Mistral-7B customer-email fine-tuning <span class="risk crit">CRITICAL</span> <span class="sname"><span class="conf">· confidence 0.93</span></span></div>
+      <div class="narr"><b>Purpose:</b> Fine-tunes Mistral-7B (QLoRA, 4-bit) on customer support emails pulled from the production database to build an internal reply-drafting assistant. <span class="prov llm">LLM</span></div>
+      <div class="narr"><b>Why it matters:</b> training data is production customer correspondence — the model weights themselves become a data asset that needs governance. <span class="prov llm">LLM</span></div>
+      <div class="factstrip" style="margin-top:.7rem">
+        <div><span class="k">Sources</span>database (SQL) <span class="cm">— support_emails table</span></div>
+        <div><span class="k">Sinks</span>Hugging Face Inference API <span class="reg">(US)</span></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ============ 2. DATA CLASSIFICATION ============ -->
+<div class="cmp">
+  <div class="cmp-title">2 · What data actually flows?</div>
+  <div class="cmp-lead">Static mode classifies by structure and naming rules. LLM mode reconstructs the request payload from code and classifies each element — categories and confidence only, never the values themselves.</div>
+  <div class="cols">
+    <div class="card">
+      <div style="font-size:.7rem;color:var(--text-muted);margin-bottom:.5rem">Data involved (rule-based)</div>
+      <span class="dtag">Database records</span><span class="dtag">Documents</span><span class="dtag weak">Personal data / PII <span class="c">heuristic</span></span>
+      <div class="payload" style="margin-top:.8rem">
+        <span class="cm"># request body — structural reconstruction</span><br>
+        messages[].content ← <span class="f">db query result</span><br>
+        <span class="cm"># element-level classification requires LLM mode</span>
+      </div>
+    </div>
+    <div class="card llm added">
+      <div style="font-size:.7rem;color:var(--text-muted);margin-bottom:.5rem">Data involved (element-level) — classification without extraction</div>
+      <span class="dtag">Customer names <span class="c">0.95</span></span><span class="dtag">Email addresses <span class="c">0.97</span></span><span class="dtag">Order references <span class="c">0.88</span></span><span class="dtag">Complaint text <span class="c">0.91</span></span>
+      <div class="payload" style="margin-top:.8rem">
+        <span class="cm"># request body — element classification</span><br>
+        messages[].content ← support_emails.body <span class="pii">→ contains PII (names, emails)</span><br>
+        messages[].content ← support_emails.customer_name <span class="pii">→ direct identifier</span><br>
+        <span class="cm"># values are classified locally and never stored or shown</span>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ============ 3. UNKNOWN PROVIDERS ============ -->
+<div class="cmp">
+  <div class="cmp-title">3 · Integrations the rulebook doesn't know yet</div>
+  <div class="cmp-lead">New AI providers appear weekly. Static mode flags suspicious patterns for manual review; LLM mode identifies them.</div>
+  <div class="cols">
+    <div class="card">
+      <div style="font-size:.78rem;color:var(--text-muted)">Manual review — unmatched candidate</div>
+      <div class="payload" style="margin-top:.6rem"><span class="f">services/enrich.py:88</span> — POST to unknown domain with <span class="f">/v1/chat/completions</span> path · confidence 0.55</div>
+      <div class="narr">Flagged as a possible AI integration. Provider unknown — requires human verification.</div>
+    </div>
+    <div class="card llm added">
+      <div style="font-size:.78rem;color:var(--text-muted)">Identified — moved into inventory</div>
+      <div class="payload" style="margin-top:.6rem"><span class="f">services/enrich.py:88</span> — <span class="f">Mistral AI La Plateforme</span> (EU) · chat completions · confidence 0.86 <span class="prov llm">LLM</span></div>
+      <div class="narr">Recognized from request shape, auth header pattern and model name <code>mistral-small-latest</code>. Suggested as a Provider KB addition — confirmed identifications feed the rulebook, so static mode improves with every scan.</div>
+    </div>
+  </div>
+</div>
+
+<!-- ============ 4. OVERLAP DETECTION ============ -->
+<div class="cmp">
+  <div class="cmp-title">4 · Functional overlaps</div>
+  <div class="cmp-lead">Static mode matches structural fingerprints. LLM mode compares what solutions are <i>for</i> — and finds the duplicates that matter.</div>
+  <div class="cols">
+    <div class="card">
+      <div class="insight"><span class="sev info"></span><div class="body"><b>4 solutions</b> share an identical pipeline fingerprint (sources, sinks, processing steps).</div><span class="prov det">RULE</span></div>
+      <div class="insight dim"><span class="sev info"></span><div class="body">Semantic duplicates with different tech stacks — not detectable structurally.</div></div>
+    </div>
+    <div class="card llm added">
+      <div class="insight"><span class="sev info"></span><div class="body"><b>4 solutions</b> share an identical pipeline fingerprint.</div><span class="prov det">RULE</span></div>
+      <div class="insight"><span class="sev warn"></span><div class="body"><b>3 teams built RAG over internal documentation</b> — LangChain + Qdrant, LlamaIndex + Chroma, and a custom FastAPI pipeline. Same capability, three maintenance burdens. <i>confidence 0.84</i></div><span class="prov llm">LLM</span></div>
+    </div>
+  </div>
+</div>
+
+<!-- ============ 5. EXECUTIVE SUMMARY ============ -->
+<div class="cmp">
+  <div class="cmp-title">5 · Executive summary</div>
+  <div class="cmp-lead">Deterministic insights appear in both modes, word-for-word. LLM mode adds interpretation — always labeled, never replacing the facts.</div>
+  <div class="cols">
+    <div class="card">
+      <div class="insight"><span class="sev crit"></span><div class="body"><b>2 solutions</b> require immediate attention: hardcoded API keys.</div><span class="prov det">RULE</span></div>
+      <div class="insight"><span class="sev warn"></span><div class="body"><b>19 solutions</b> send data to US-based providers — verify DPA and data residency.</div><span class="prov det">RULE</span></div>
+      <div class="insight"><span class="sev warn"></span><div class="body"><b>6 solutions</b> process Personal data / PII.</div><span class="prov det">RULE</span></div>
+    </div>
+    <div class="card llm">
+      <div class="insight"><span class="sev crit"></span><div class="body"><b>2 solutions</b> require immediate attention: hardcoded API keys.</div><span class="prov det">RULE</span></div>
+      <div class="insight"><span class="sev warn"></span><div class="body"><b>19 solutions</b> send data to US-based providers — verify DPA and data residency.</div><span class="prov det">RULE</span></div>
+      <div class="insight added" style="border-radius:6px;padding-left:.5rem;background:var(--accent-bg)"><span class="sev warn"></span><div class="body">The highest-impact risk concentration is the <b>customer-email fine-tuning pipeline</b>: production PII flows into training data, credentials are exposed in the same notebooks, and the resulting model is deployed without access control. <i>confidence 0.81</i></div><span class="prov llm">LLM</span></div>
+    </div>
+  </div>
+</div>
+
+<!-- ============ CAPABILITY TABLE ============ -->
+<div class="cmp">
+  <div class="cmp-title">Capability overview</div>
+  <table class="captable">
+    <thead><tr><th style="width:44%">Capability</th><th>Static analysis</th><th>+ LLM analysis</th></tr></thead>
+    <tbody>
+      <tr><td>Discovery of AI integrations, keys, endpoints <div class="note">file:line evidence, deterministic IDs, diff-stable</div></td><td class="yes">✓ identical</td><td class="yes">✓ identical</td></tr>
+      <tr><td>Provider &amp; exit-point map with KB facts</td><td class="yes">✓</td><td class="yes">✓</td></tr>
+      <tr><td>Owner attribution, overlap fingerprints, deltas between scans</td><td class="yes">✓</td><td class="yes">✓</td></tr>
+      <tr><td>Narrative inventory: names, purpose, "why it matters"</td><td class="note">structured facts only</td><td class="yes">✓ <span class="prov llm">LLM</span></td></tr>
+      <tr><td>Element-level data classification (categories + confidence, never values)</td><td class="part">structural only</td><td class="yes">✓ <span class="prov llm">LLM</span></td></tr>
+      <tr><td>Identification of unknown providers</td><td class="part">flagged for manual review</td><td class="yes">✓ <span class="prov llm">LLM</span></td></tr>
+      <tr><td>Semantic overlap (same capability, different stack)</td><td class="part">fingerprint matches only</td><td class="yes">✓ <span class="prov llm">LLM</span></td></tr>
+      <tr><td>Runs fully offline, zero model dependency</td><td class="yes">✓</td><td class="note">local model (Ollama) or your private endpoint</td></tr>
+      <tr><td>Bit-identical output on repeated runs</td><td class="yes">✓</td><td class="note">deterministic core ✓ · LLM fields versioned &amp; labeled</td></tr>
+    </tbody>
+  </table>
+</div>
+
+<!-- ============ TRUST STRIP ============ -->
+<div class="trust">
+  <div class="t"><b>Your perimeter, both modes</b>Static mode needs nothing. LLM mode runs on local Ollama or an API endpoint <i>you</i> choose — your Azure OpenAI, Bedrock, or on-prem model. Scout never ships code anywhere else.</div>
+  <div class="t"><b>Redaction before inference</b>Before any code reaches a model, Scout's pre-processing strips API keys and secrets. Data classification returns categories and confidence — never the underlying values.</div>
+  <div class="t"><b>Provenance on every field</b>Every statement is labeled <span class="prov det">RULE</span> or <span class="prov llm">LLM</span> with confidence. Auditors can filter to deterministic-only at any time.</div>
+</div>
+
+<div class="footer">
+  AI Scout · the comparison above shows one scan of the same repository in both modes<br>
+  <span class="peri">No data left the perimeter in either mode.</span>
+</div>
+
+</div>
+</body>
+</html>

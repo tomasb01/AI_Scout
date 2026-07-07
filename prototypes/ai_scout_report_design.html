@@ -1,0 +1,407 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>AI Scout Report — Composed design (dev reference)</title>
+<style>
+:root{--bg:#0a0c10;--surface:#12151c;--surface2:#1a1e28;--surface3:#222738;--border:#2a2f42;--text:#e4e8f4;--text-muted:#8892aa;--text-dim:#5a6280;--accent:#6366f1;--accent-bg:rgba(99,102,241,.1);--ok:#22c55e;--ok-bg:rgba(34,197,94,.08);--warning:#f59e0b;--warning-bg:rgba(245,158,11,.08);--critical:#ef4444;--critical-bg:rgba(239,68,68,.08);--blue:#3b82f6;--purple:#a78bfa;--cyan:#22d3ee;--mono:'SF Mono',ui-monospace,'Cascadia Code',Menlo,monospace}
+*{margin:0;padding:0;box-sizing:border-box}
+body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',system-ui,sans-serif;background:var(--bg);color:var(--text);line-height:1.55}
+.main{max-width:1160px;margin:0 auto;padding:1.6rem 2rem 3rem}
+h2.sec{font-size:.72rem;font-weight:700;text-transform:uppercase;letter-spacing:.09em;color:var(--text-muted);margin-bottom:.9rem}
+.section{margin-bottom:2.6rem}
+code,.mono{font-family:var(--mono)}
+
+/* ===== Sticky ribbon: scan facts ===== */
+.ribbon{position:sticky;top:0;z-index:100;background:var(--surface);border-bottom:1px solid var(--border);padding:.55rem 2rem;display:flex;justify-content:space-between;align-items:center;gap:1rem;flex-wrap:wrap}
+.ribbon .logo{font-weight:800;font-size:1rem;white-space:nowrap}
+.ribbon .logo span{color:var(--accent)}
+.ribbon .facts{display:flex;gap:1.2rem;font-size:.72rem;color:var(--text-muted);flex-wrap:wrap;align-items:center}
+.ribbon .facts strong{color:var(--text);font-weight:600}
+.mode-badge{font-size:.6rem;font-weight:700;text-transform:uppercase;letter-spacing:.05em;padding:.18rem .5rem;border-radius:4px;background:var(--accent-bg);color:var(--accent);border:1px solid rgba(99,102,241,.3)}
+
+/* ===== KPI strip + delta ===== */
+.kpi-strip{display:grid;grid-template-columns:repeat(5,1fr) 1.4fr;gap:.8rem;margin:1.6rem 0 0}
+.kpi{background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:.9rem 1rem;text-align:center}
+.kpi .num{font-size:1.9rem;font-weight:800;line-height:1.1}
+.kpi .label{font-size:.62rem;color:var(--text-muted);text-transform:uppercase;letter-spacing:.05em;margin-top:.25rem}
+.kpi.ok .num{color:var(--ok)}.kpi.warn .num{color:var(--warning)}.kpi.crit .num{color:var(--critical)}
+.delta-box{background:var(--surface);border:1px dashed var(--border);border-radius:10px;padding:.7rem 1rem;font-size:.72rem;color:var(--text-muted)}
+.delta-box .dl{font-size:.6rem;text-transform:uppercase;letter-spacing:.06em;color:var(--text-dim);margin-bottom:.3rem}
+.delta-box b{color:var(--text)}
+.delta-up{color:var(--warning);font-weight:700}.delta-down{color:var(--ok);font-weight:700}
+
+/* ===== Executive summary: typed insights ===== */
+.exec{background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:1.2rem 1.4rem}
+.insight{display:flex;gap:.7rem;align-items:flex-start;padding:.48rem 0;border-bottom:1px solid var(--border);font-size:.84rem}
+.insight:last-child{border:none}
+.insight .sev{min-width:8px;height:8px;border-radius:50%;margin-top:.45rem}
+.sev.info{background:var(--blue)}.sev.warn{background:var(--warning)}.sev.crit{background:var(--critical)}.sev.pos{background:var(--ok)}
+.insight b{color:var(--text)}
+.insight .body{flex:1;color:var(--text-muted)}
+.prov{font-size:.55rem;font-weight:700;letter-spacing:.04em;padding:.1rem .35rem;border-radius:3px;white-space:nowrap;margin-top:.2rem}
+.prov.det{background:var(--surface3);color:var(--text-dim);border:1px solid var(--border)}
+.prov.llm{background:var(--accent-bg);color:var(--accent)}
+
+/* ===== Exit points ===== */
+.exit-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:.8rem}
+.exit-card{background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:1rem}
+.exit-card .hd{display:flex;justify-content:space-between;align-items:center;margin-bottom:.5rem}
+.exit-card .nm{font-size:.85rem;font-weight:700}
+.exit-card .cnt{font-size:.68rem;color:var(--text-muted);background:var(--surface2);padding:.12rem .5rem;border-radius:10px}
+.exit-card .dt{font-size:.7rem;color:var(--text-muted);line-height:1.45}
+.exit-card .kb{font-size:.62rem;color:var(--text-dim);margin-top:.45rem;padding-top:.45rem;border-top:1px dashed var(--border)}
+.region{display:inline-block;font-size:.58rem;font-weight:700;padding:.1rem .35rem;border-radius:3px;margin-top:.45rem}
+.region.us{background:var(--warning-bg);color:var(--warning)}
+.region.eu{background:rgba(59,130,246,.1);color:var(--blue)}
+.region.local{background:var(--ok-bg);color:var(--ok)}
+.kb-note{font-size:.62rem;color:var(--text-dim);margin-top:.6rem}
+
+/* ===== Two-col: categories + owners ===== */
+.two-col{display:grid;grid-template-columns:1fr 1fr;gap:1rem}
+.panel{background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:1.1rem 1.2rem}
+.panel h3{font-size:.7rem;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:var(--text-muted);margin-bottom:.9rem}
+.lane{display:grid;grid-template-columns:130px 1fr 46px;gap:.7rem;align-items:center;padding:.32rem 0;font-size:.76rem}
+.lane .bar{height:18px;border-radius:4px;display:flex;overflow:hidden;background:var(--surface2)}
+.lane .seg{display:flex;align-items:center;justify-content:center;font-size:.58rem;font-weight:700;color:#fff;min-width:16px}
+.seg.ok{background:rgba(34,197,94,.5)}.seg.warn{background:rgba(245,158,11,.65)}.seg.crit{background:rgba(239,68,68,.65)}
+.lane .cnt{text-align:right;font-weight:600;font-size:.74rem}
+.owner-row{display:flex;align-items:center;gap:.7rem;padding:.4rem 0;font-size:.76rem;border-bottom:1px solid var(--border)}
+.owner-row:last-child{border:none}
+.owner-row .who{width:140px;font-weight:600}
+.owner-row .obar{flex:1;height:14px;background:var(--surface2);border-radius:4px;overflow:hidden}
+.owner-row .ofill{height:100%;background:var(--warning);opacity:.8}
+.owner-row .ostat{font-size:.68rem;color:var(--text-muted);white-space:nowrap}
+.spof{font-size:.55rem;font-weight:800;background:var(--warning-bg);color:var(--warning);padding:.1rem .35rem;border-radius:3px}
+
+/* ===== Actions ===== */
+.action{background:var(--surface);border:1px solid var(--border);border-radius:8px;padding:.75rem 1rem;display:grid;grid-template-columns:36px 1fr 110px;gap:.8rem;align-items:center;margin-bottom:.55rem}
+.action .pri{width:32px;height:32px;border-radius:6px;display:flex;align-items:center;justify-content:center;font-weight:800;font-size:1rem}
+.pri.p1{background:var(--critical-bg);color:var(--critical)}.pri.p2{background:var(--warning-bg);color:var(--warning)}.pri.p3{background:rgba(59,130,246,.1);color:var(--blue)}
+.action .ti{font-size:.8rem;font-weight:600}
+.action .why{font-size:.68rem;color:var(--text-muted);margin-top:.1rem}
+.action .scope{font-size:.62rem;color:var(--text-dim);text-align:right}
+
+/* ===== Solutions table ===== */
+.filters{display:flex;gap:.5rem;margin-bottom:.8rem;flex-wrap:wrap}
+.chip{font-size:.7rem;padding:.25rem .7rem;border-radius:14px;border:1px solid var(--border);color:var(--text-muted);cursor:pointer}
+.chip.active{border-color:var(--accent);color:var(--accent);background:var(--accent-bg)}
+table.sol{width:100%;border-collapse:collapse}
+table.sol th{text-align:left;padding:.55rem .7rem;font-size:.64rem;color:var(--text-muted);text-transform:uppercase;letter-spacing:.05em;border-bottom:2px solid var(--border)}
+table.sol td{padding:.65rem .7rem;border-bottom:1px solid var(--border);font-size:.78rem;vertical-align:top}
+table.sol tr.row:hover{background:var(--surface2);cursor:pointer}
+.sname{font-weight:600}
+.facts-line{font-size:.65rem;color:var(--text-dim);margin-top:.2rem;font-family:var(--mono)}
+.facts-line b{color:var(--text-muted);font-weight:600}
+.pill{display:inline-block;font-size:.6rem;padding:.08rem .32rem;border-radius:3px;background:var(--accent-bg);color:var(--accent);margin:.08rem .12rem .08rem 0}
+.dtag{display:inline-block;font-size:.6rem;padding:.08rem .32rem;border-radius:3px;background:rgba(167,139,250,.12);color:var(--purple);margin:.08rem .12rem .08rem 0}
+.risk{font-size:.62rem;font-weight:700;padding:.12rem .45rem;border-radius:4px;white-space:nowrap}
+.risk.none{background:var(--surface3);color:var(--text-muted)}
+.risk.review{background:var(--warning-bg);color:var(--warning)}
+.risk.crit{background:var(--critical-bg);color:var(--critical)}
+.conf{font-size:.6rem;color:var(--text-dim)}
+
+/* ===== Expanded detail ===== */
+.detail{background:var(--surface);border-left:2px solid var(--accent)}
+.detail-inner{display:grid;grid-template-columns:1.2fr 1fr;gap:1.4rem;padding:1.1rem 1.2rem}
+.detail h4{font-size:.62rem;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:var(--text-muted);margin:.9rem 0 .45rem}
+.detail h4:first-child{margin-top:0}
+.factstrip{font-family:var(--mono);font-size:.72rem;line-height:1.9;background:var(--surface2);border-radius:8px;padding:.7rem .9rem}
+.factstrip .k{color:var(--text-dim);display:inline-block;width:74px}
+.factstrip .v{color:var(--text)}
+.factstrip .reg{color:var(--warning)}
+.finding{font-size:.7rem;font-family:var(--mono);padding:.3rem 0;border-bottom:1px dashed var(--border);color:var(--text-muted)}
+.finding:last-child{border:none}
+.finding .ft{color:var(--accent);font-weight:700}
+.finding .ft.key{color:var(--critical)}
+.riskcard{border-left:3px solid var(--critical);background:var(--critical-bg);border-radius:6px;padding:.6rem .8rem;font-size:.74rem;margin-bottom:.5rem}
+.riskcard.w{border-left-color:var(--warning);background:var(--warning-bg)}
+.riskcard b{display:block;margin-bottom:.15rem}
+.riskcard .rc-body{color:var(--text-muted);font-size:.7rem}
+.provider-kv{font-size:.72rem}
+.provider-kv .row{display:grid;grid-template-columns:110px 1fr;padding:.25rem 0;border-bottom:1px solid var(--border)}
+.provider-kv .row:last-child{border:none}
+.provider-kv .k{color:var(--text-dim)}
+.qa-note{font-size:.65rem;color:var(--text-dim);background:var(--surface2);border:1px dashed var(--border);border-radius:6px;padding:.5rem .7rem;margin-top:.6rem}
+.qa-note code{color:var(--warning)}
+
+/* ===== Manual review / limitations / QA appendix ===== */
+.muted-card{background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:1rem 1.2rem;font-size:.76rem;color:var(--text-muted)}
+.muted-card ul{margin:.4rem 0 0 1.1rem}
+.muted-card li{margin:.25rem 0}
+details.appendix{background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:.8rem 1.2rem;font-size:.74rem;color:var(--text-muted)}
+details.appendix summary{cursor:pointer;font-weight:600;color:var(--text-muted);font-size:.72rem}
+.suppr{font-family:var(--mono);font-size:.66rem;margin-top:.6rem;padding:.5rem .7rem;background:var(--surface2);border-radius:6px;color:var(--text-dim)}
+.suppr .rule{color:var(--warning);font-weight:700}
+
+.footer{text-align:center;padding:1.6rem 0 0;color:var(--text-dim);font-size:.66rem;border-top:1px solid var(--border);margin-top:2.2rem;line-height:1.8}
+.footer .peri{color:var(--ok)}
+
+/* ===== Print: executive layer survives paper ===== */
+@media print{
+  body{background:#fff;color:#111}
+  :root{--surface:#fff;--surface2:#f3f4f6;--border:#d1d5db;--text:#111;--text-muted:#374151;--text-dim:#6b7280}
+  .ribbon{position:static}
+  .section.screen-only, .filters, details.appendix{display:none}
+  .exit-card,.panel,.kpi,.exec{border:1px solid #d1d5db}
+}
+@media (max-width:860px){
+  .kpi-strip{grid-template-columns:repeat(3,1fr)}
+  .exit-grid,.two-col,.detail-inner{grid-template-columns:1fr}
+}
+</style>
+</head>
+<body>
+
+<!-- ============ RIBBON: scan facts (audit metadata) ============ -->
+<div class="ribbon">
+  <div class="logo">AI <span>Scout</span> <span style="color:var(--text-dim);font-weight:400;font-size:.78rem">Report</span></div>
+  <div class="facts">
+    <span><strong>AI-developer-3</strong> · main</span>
+    <span><strong>746</strong> files</span>
+    <span>2026-06-12 15:28 UTC</span>
+    <span>Scout <strong>v0.8.2</strong></span>
+    <span>Provider KB <strong>2026.23</strong></span>
+    <span class="mode-badge">Static analysis · no-LLM</span>
+  </div>
+</div>
+
+<div class="main">
+
+<!-- ============ KPI + DELTA ============ -->
+<div class="section">
+  <div class="kpi-strip">
+    <div class="kpi"><div class="num">52</div><div class="label">AI Solutions</div></div>
+    <div class="kpi ok"><div class="num">41</div><div class="label">No findings</div></div>
+    <div class="kpi warn"><div class="num">9</div><div class="label">Review</div></div>
+    <div class="kpi crit"><div class="num">2</div><div class="label">Critical</div></div>
+    <div class="kpi"><div class="num">4</div><div class="label">Capability overlaps</div></div>
+    <div class="delta-box">
+      <div class="dl">Since previous scan · 2026-05-12</div>
+      <span class="delta-up">+3</span> new solutions · <span class="delta-down">−1</span> removed · <b>1 new provider</b> (Tavily)
+    </div>
+  </div>
+</div>
+
+<!-- ============ EXECUTIVE SUMMARY: typed insights ============ -->
+<div class="section">
+  <h2 class="sec">Executive summary</h2>
+  <div class="exec">
+    <div class="insight"><span class="sev crit"></span><div class="body"><b>2 solutions</b> require immediate attention: hardcoded API keys.</div><span class="prov det">RULE</span></div>
+    <div class="insight"><span class="sev warn"></span><div class="body"><b>19 solutions</b> send data to US-based providers (OpenAI, Hugging Face, Tavily) — verify DPA and data-residency requirements.</div><span class="prov det">RULE</span></div>
+    <div class="insight"><span class="sev warn"></span><div class="body">A single contributor (<b>lukaskellerstein</b>) created all 52 solutions — single-point-of-failure risk.</div><span class="prov det">RULE</span></div>
+    <div class="insight"><span class="sev warn"></span><div class="body"><b>6 solutions</b> process Personal data / PII — elevated compliance attention recommended.</div><span class="prov det">RULE</span></div>
+    <div class="insight"><span class="sev info"></span><div class="body"><b>11 solutions</b> functionally overlap in 4 capability areas — consolidation opportunity.</div><span class="prov det">RULE</span></div>
+    <div class="insight"><span class="sev info"></span><div class="body">Highest dependency: <b>LangChain</b>, used by 27 of 52 solutions (52%).</div><span class="prov det">RULE</span></div>
+    <div class="insight"><span class="sev pos"></span><div class="body"><b>8 solutions</b> run fully local (no data egress).</div><span class="prov det">RULE</span></div>
+    <div class="insight"><span class="sev info"></span><div class="body"><b>3 possible AI integrations</b> could not be matched to a known provider — listed under “Manual review”.</div><span class="prov det">RULE</span></div>
+  </div>
+</div>
+
+<!-- ============ DATA EXIT POINTS ============ -->
+<div class="section">
+  <h2 class="sec">Where data leaves the perimeter</h2>
+  <div class="exit-grid">
+    <div class="exit-card">
+      <div class="hd"><div class="nm">OpenAI</div><div class="cnt">14 solutions</div></div>
+      <div class="dt">GPT-4o, GPT-4, embeddings</div>
+      <div class="region us">US</div>
+      <div class="kb">KB: DPA available · API data not used for training · SOC 2 Type II</div>
+    </div>
+    <div class="exit-card">
+      <div class="hd"><div class="nm">Hugging Face</div><div class="cnt">7 solutions</div></div>
+      <div class="dt">Inference API + self-hosted models</div>
+      <div class="region us">US</div>
+      <div class="kb">KB: Inference data not stored beyond request · self-hosting available · SOC 2 Type II</div>
+    </div>
+    <div class="exit-card">
+      <div class="hd"><div class="nm">Tavily</div><div class="cnt">5 solutions</div></div>
+      <div class="dt">Web search API — search queries leave perimeter</div>
+      <div class="region us">US</div>
+      <div class="kb">KB: no enterprise DPA on standard tier</div>
+    </div>
+    <div class="exit-card">
+      <div class="hd"><div class="nm">MCP tools</div><div class="cnt">12 solutions</div></div>
+      <div class="dt">3 servers expose filesystem or code execution — privileged local access</div>
+      <div class="region local">LOCAL</div>
+      <div class="kb">Data stays local; review tool scope and access control</div>
+    </div>
+    <div class="exit-card">
+      <div class="hd"><div class="nm">Ollama</div><div class="cnt">8 solutions</div></div>
+      <div class="dt">Local LLM inference</div>
+      <div class="region local">LOCAL</div>
+      <div class="kb">Zero data egress</div>
+    </div>
+    <div class="exit-card">
+      <div class="hd"><div class="nm">Vector stores</div><div class="cnt">9 solutions</div></div>
+      <div class="dt">Qdrant, ChromaDB — embeddings may encode source data</div>
+      <div class="region local">LOCAL</div>
+      <div class="kb">Self-hosted instances detected in configuration</div>
+    </div>
+  </div>
+  <div class="kb-note">Provider facts come from Provider KB 2026.23 (snapshot date applies). They describe vendor policy, not a compliance verdict for your organization.</div>
+</div>
+
+<!-- ============ CATEGORIES + OWNERS ============ -->
+<div class="section">
+  <div class="two-col">
+    <div class="panel">
+      <h3>What was built</h3>
+      <div class="lane"><div>Chatbot</div><div class="bar"><div class="seg ok" style="width:84%">13</div><div class="seg warn" style="width:16%">2</div></div><div class="cnt">15</div></div>
+      <div class="lane"><div>AI Agents</div><div class="bar"><div class="seg ok" style="width:88%">12</div><div class="seg warn" style="width:12%">2</div></div><div class="cnt">14</div></div>
+      <div class="lane"><div>RAG &amp; Search</div><div class="bar"><div class="seg ok" style="width:90%">8</div><div class="seg warn" style="width:10%">1</div></div><div class="cnt">9</div></div>
+      <div class="lane"><div>Fine-tuning</div><div class="bar"><div class="seg ok" style="width:50%">3</div><div class="seg warn" style="width:25%">2</div><div class="seg crit" style="width:25%">2</div></div><div class="cnt">7</div></div>
+      <div class="lane"><div>MCP servers</div><div class="bar"><div class="seg ok" style="width:60%">3</div><div class="seg warn" style="width:40%">2</div></div><div class="cnt">5</div></div>
+      <div class="lane"><div>Workflows</div><div class="bar"><div class="seg ok" style="width:100%">2</div></div><div class="cnt">2</div></div>
+    </div>
+    <div class="panel">
+      <h3>Owners</h3>
+      <div class="owner-row"><div class="who">lukaskellerstein</div><div class="obar"><div class="ofill" style="width:100%"></div></div><div class="ostat">52 (100%) <span class="spof">SPOF</span></div></div>
+      <div style="font-size:.66rem;color:var(--text-dim);margin-top:.7rem">Ownership is derived from git history at solution level (last + dominant committer). Per-person activity metrics are intentionally not collected.</div>
+    </div>
+  </div>
+</div>
+
+<!-- ============ RECOMMENDED ACTIONS ============ -->
+<div class="section">
+  <h2 class="sec">Recommended actions</h2>
+  <div class="action"><div class="pri p1">1</div><div><div class="ti">Rotate 2 hardcoded Hugging Face API keys and move them to a secret manager</div><div class="why">Keys are readable by anyone with repository access. Findings link directly to file and line.</div></div><div class="scope">2 solutions · Fine-tuning</div></div>
+  <div class="action"><div class="pri p2">2</div><div><div class="ti">Review 3 MCP servers exposing code execution</div><div class="why">LLM clients can invoke local code execution. Verify tool scope and access controls.</div></div><div class="scope">3 solutions · MCP</div></div>
+  <div class="action"><div class="pri p3">3</div><div><div class="ti">Verify DPA coverage for Tavily (5 solutions)</div><div class="why">Search queries leave the perimeter; KB indicates no enterprise DPA on the standard tier.</div></div><div class="scope">5 solutions · Cross-category</div></div>
+</div>
+
+<!-- ============ SOLUTIONS INVENTORY ============ -->
+<div class="section">
+  <h2 class="sec">Solutions inventory — 52</h2>
+  <div class="filters">
+    <span class="chip active">All (52)</span><span class="chip">Critical (2)</span><span class="chip">Review (9)</span><span class="chip">No findings (41)</span>
+    <span class="chip">By owner</span><span class="chip">By provider</span><span class="chip">Export CSV / SARIF</span>
+  </div>
+  <table class="sol">
+    <thead><tr><th style="width:38%">Solution</th><th>Owner</th><th>Tech</th><th>Data involved</th><th>Risk</th></tr></thead>
+    <tbody>
+
+    <!-- Expanded row: detail open -->
+    <tr class="row" style="background:var(--surface2)">
+      <td>
+        <div class="sname">Mistral fine-tuning pipeline ▾</div>
+        <div class="facts-line"><b>db (SQL)</b> → fine-tuning → <b>Hugging Face Inference API (US)</b></div>
+      </td>
+      <td style="font-size:.72rem;color:var(--text-muted)">lukaskellerstein</td>
+      <td><span class="pill">transformers</span><span class="pill">PEFT</span></td>
+      <td><span class="dtag">Database records</span><span class="dtag">Credentials</span></td>
+      <td><span class="risk crit">CRITICAL</span></td>
+    </tr>
+    <tr class="detail"><td colspan="5">
+      <div class="detail-inner">
+        <div>
+          <h4>Facts <span class="prov det" style="margin-left:.4rem">RULE</span></h4>
+          <div class="factstrip">
+            <div><span class="k">Sources</span><span class="v">database (SQL)</span></div>
+            <div><span class="k">Sinks</span><span class="v">Hugging Face Inference API <span class="reg">(US)</span></span></div>
+            <div><span class="k">Pattern</span><span class="v">fine-tuning pipeline</span></div>
+            <div><span class="k">Tech</span><span class="v">transformers, PEFT</span></div>
+            <div><span class="k">Files</span><span class="v">2 · open in GitHub ↗</span></div>
+          </div>
+          <div class="qa-note">Narrative summary suppressed by QA linter (<code>L-07 source-code leakage</code>) — structured facts shown instead. Enable LLM analysis for narrative summaries.</div>
+
+          <h4>Risk analysis</h4>
+          <div class="riskcard"><b>Hardcoded API key in source code</b><span class="rc-body">2 keys found directly in notebooks. Anyone with repository access can extract and misuse them. Rotate immediately and move to a secret manager.</span></div>
+          <div class="riskcard w"><b>Training pipeline ingests production-like data</b><span class="rc-body">Training pipelines typically consume real data, carrying higher privacy and IP-leakage risk than inference. Verify data provenance and access controls on the training set.</span></div>
+        </div>
+        <div>
+          <h4>Findings (4) · confidence per finding</h4>
+          <div class="finding"><span class="ft key">api key</span> 2_tools/mistral-v03-4bit-16bit.ipynb:47 — hf_qhzLG…LnAX <span class="conf">· 1.00</span></div>
+          <div class="finding"><span class="ft key">api key</span> 2_tools/mistral-v03-4bit-16bit-full.ipynb:44 — hf_qhzLG…LnAX <span class="conf">· 1.00</span></div>
+          <div class="finding"><span class="ft">import</span> 2_tools/mistral-v03-4bit-16bit.ipynb:52 — from transformers import <span class="conf">· 1.00</span></div>
+          <div class="finding"><span class="ft">sql source</span> 2_tools/data_prep.ipynb:18 — read_sql(…) <span class="conf">· 0.91</span></div>
+
+          <h4>Provider · KB 2026.23</h4>
+          <div class="provider-kv">
+            <div class="row"><span class="k">Vendor</span><span>Hugging Face, Inc.</span></div>
+            <div class="row"><span class="k">Residency</span><span>US (Inference API) · self-hosted available</span></div>
+            <div class="row"><span class="k">Training policy</span><span>Inference data not stored beyond request</span></div>
+            <div class="row"><span class="k">Certifications</span><span>SOC 2 Type II</span></div>
+            <div class="row"><span class="k">Model lifecycle</span><span>mistral-v0.3 — supported</span></div>
+          </div>
+        </div>
+      </div>
+    </td></tr>
+
+    <!-- Normal rows -->
+    <tr class="row">
+      <td><div class="sname">Fleurdin florist assistant</div>
+        <div class="facts-line"><b>REST endpoint</b> → chat completion → <b>Anthropic API (US)</b> · history in DB</div></td>
+      <td style="font-size:.72rem;color:var(--text-muted)">lukaskellerstein</td>
+      <td><span class="pill">Claude</span><span class="pill">FastAPI</span></td>
+      <td><span class="dtag">Chat / Conversation</span></td>
+      <td><span class="risk none">NO FINDINGS</span></td>
+    </tr>
+    <tr class="row">
+      <td><div class="sname">Code-execution MCP server</div>
+        <div class="facts-line"><b>LLM client</b> → MCP protocol → <b>local code execution</b></div></td>
+      <td style="font-size:.72rem;color:var(--text-muted)">lukaskellerstein</td>
+      <td><span class="pill">MCP</span></td>
+      <td><span class="dtag">Source code</span></td>
+      <td><span class="risk review">REVIEW</span></td>
+    </tr>
+    <tr class="row">
+      <td><div class="sname">Document RAG over ChromaDB</div>
+        <div class="facts-line"><b>file input</b> → RAG → <b>ChromaDB (local)</b> + <b>OpenAI embeddings (US)</b></div></td>
+      <td style="font-size:.72rem;color:var(--text-muted)">lukaskellerstein</td>
+      <td><span class="pill">LangChain</span><span class="pill">ChromaDB</span></td>
+      <td><span class="dtag">Documents</span></td>
+      <td><span class="risk none">NO FINDINGS</span></td>
+    </tr>
+    <tr class="row">
+      <td colspan="5" style="text-align:center;color:var(--text-dim);font-size:.72rem;padding:.8rem">+ 48 more solutions</td>
+    </tr>
+    </tbody>
+  </table>
+</div>
+
+<!-- ============ MANUAL REVIEW (low-confidence candidates, separate bucket) ============ -->
+<div class="section screen-only">
+  <h2 class="sec">Manual review — unmatched candidates (3)</h2>
+  <div class="muted-card">
+    Heuristic detection found integrations that could not be matched to a known provider. They are listed separately and are not counted in the inventory above.
+    <ul>
+      <li><span class="mono">services/enrich.py:88</span> — POST to unknown domain with <span class="mono">/v1/chat/completions</span> path · confidence 0.55</li>
+      <li><span class="mono">tools/translate.js:14</span> — prompt-shaped payload to unlisted endpoint · confidence 0.45</li>
+      <li><span class="mono">legacy/summarize.py:31</span> — completion-style request builder, provider unknown · confidence 0.40</li>
+    </ul>
+  </div>
+</div>
+
+<!-- ============ SCOPE & LIMITATIONS ============ -->
+<div class="section">
+  <h2 class="sec">Scope &amp; limitations</h2>
+  <div class="muted-card">
+    This report is based on <b>static analysis</b>: it shows where data <b>can</b> flow according to code and configuration, not what was transmitted at runtime.
+    <ul>
+      <li>Scanned: 1 repository, branch main, 746 files. Languages covered: Python, JavaScript/TypeScript, YAML. 12 files skipped (binary or &gt; size limit).</li>
+      <li>Provider facts reflect Provider KB 2026.23 and may change after the snapshot date.</li>
+      <li>Findings carry per-finding confidence; items below 0.60 are listed under Manual review only.</li>
+      <li>Risk labels are evidence, not a compliance verdict; “No findings” means no rule matched, not approval.</li>
+    </ul>
+  </div>
+</div>
+
+<!-- ============ QA APPENDIX (collapsed) ============ -->
+<div class="section screen-only">
+  <details class="appendix">
+    <summary>QA appendix — suppressed by report linter (1)</summary>
+    <div class="suppr"><span class="rule">L-07 source-code leakage</span> · template T-SUMMARY-v1 · solution mistral-fine-tuning<br>
+    “Reads from: SQL query. Copy Jupyter server address in the output of the terminal. Reads from: database (THE).” → replaced by fact strip.</div>
+  </details>
+</div>
+
+<div class="footer">
+  AI Scout v0.8.2 · Provider KB 2026.23 · Static analysis mode · report generated deterministically<br>
+  <span class="peri">No data left your perimeter during this scan.</span> · Enable LLM analysis (local or private endpoint) for narrative summaries and deeper data classification.
+</div>
+
+</div>
+</body>
+</html>

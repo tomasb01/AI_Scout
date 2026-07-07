@@ -31,6 +31,9 @@ Thumbs.db
 *.html
 !aiscout/report/templates/*.html
 !aiscout/report/templates/*.j2
+!aiscout/web/templates/*.html
+!prototypes/*.html
+!landing/*.html
 
 # Coverage
 htmlcov/

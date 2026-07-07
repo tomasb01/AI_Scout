@@ -1,0 +1,399 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>AI Scout — Field Briefing (Descent concept)</title>
+<style>
+/* ============================================================
+   THE DESCENT — one report, four depths.
+   L0 Briefing (paper) → L1 Overview → L2 Solution → L3 Evidence (terminal)
+   The page literally darkens as you descend from boardroom to code.
+   ============================================================ */
+:root{
+  --paper:#f6f4ee;--paper2:#eceada;--ink:#14161d;--ink-soft:#3c4150;--ink-dim:#7a7f8e;
+  --accent:#5552e8;--accent-soft:rgba(85,82,232,.09);
+  --ok:#1a9e54;--warn:#c47c11;--crit:#cf3434;
+  --d-bg:#0a0c10;--d-surface:#12151c;--d-surface2:#1a1e28;--d-border:#2a2f42;
+  --d-text:#e4e8f4;--d-muted:#8892aa;--d-dim:#5a6280;
+  --d-ok:#22c55e;--d-warn:#f59e0b;--d-crit:#ef4444;--d-accent:#6366f1;
+  --serif:Georgia,'Iowan Old Style','Times New Roman',serif;
+  --sans:-apple-system,BlinkMacSystemFont,'Segoe UI',system-ui,sans-serif;
+  --mono:'SF Mono',ui-monospace,'Cascadia Code',Menlo,monospace;
+}
+*{margin:0;padding:0;box-sizing:border-box}
+html{scroll-behavior:smooth}
+body{font-family:var(--sans);background:var(--d-bg);color:var(--ink)}
+
+/* ===== Depth rail (fixed left) ===== */
+.rail{position:fixed;left:0;top:0;bottom:0;width:64px;z-index:200;display:flex;flex-direction:column;align-items:center;padding:1.2rem 0;background:linear-gradient(180deg,rgba(246,244,238,.0),rgba(10,12,16,.0))}
+.rail .line{position:absolute;top:84px;bottom:84px;width:2px;background:linear-gradient(180deg,#c9c4b2 0%,#8a8a96 40%,#3a3f52 70%,#23283a 100%);border-radius:2px}
+.rail a{position:relative;z-index:1;width:34px;height:34px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:.6rem;font-weight:800;margin:1.4rem 0;text-decoration:none;border:2px solid #b9b4a2;background:var(--paper);color:var(--ink-soft);transition:all .2s;font-family:var(--mono)}
+.rail a:nth-child(4){border-color:#6a7088;background:#262b3c;color:#aab2cc}
+.rail a:nth-child(5){border-color:#3d4358;background:#171b26;color:#8892aa}
+.rail a:nth-child(6){border-color:#2a2f42;background:#0d0f15;color:#5a6280}
+.rail a.active{border-color:var(--accent);box-shadow:0 0 0 4px rgba(85,82,232,.2);transform:scale(1.12)}
+.rail .lbl{position:absolute;left:52px;font-size:.55rem;letter-spacing:.08em;text-transform:uppercase;color:inherit;opacity:0;transition:opacity .15s;white-space:nowrap;pointer-events:none}
+.rail a:hover .lbl{opacity:1}
+
+/* ============================================================
+   L0 — FIELD BRIEFING (paper)
+   ============================================================ */
+.L0{background:var(--paper);color:var(--ink);padding:3.4rem 2rem 4rem;border-bottom:1px solid var(--paper2)}
+.sheet{max-width:880px;margin:0 auto}
+.brief-head{display:flex;justify-content:space-between;align-items:flex-end;border-bottom:3px solid var(--ink);padding-bottom:.9rem;margin-bottom:1.6rem}
+.brief-head .t1{font-family:var(--serif);font-size:1.9rem;font-weight:700;letter-spacing:-.01em}
+.brief-head .t1 span{color:var(--accent)}
+.brief-head .meta{text-align:right;font-family:var(--mono);font-size:.62rem;color:var(--ink-dim);line-height:1.7}
+.stamp{display:inline-block;font-family:var(--mono);font-size:.58rem;font-weight:700;letter-spacing:.12em;color:var(--ok);border:1.5px solid var(--ok);padding:.15rem .5rem;border-radius:2px;transform:rotate(-1.2deg);margin-top:.3rem}
+
+/* Lede — the one sentence everyone reads */
+.lede{font-family:var(--serif);font-size:1.42rem;line-height:1.45;margin:1.4rem 0 .5rem;max-width:820px}
+.lede b{background:linear-gradient(transparent 62%,rgba(85,82,232,.22) 62%);font-weight:700}
+.lede .crit-u{background:linear-gradient(transparent 62%,rgba(207,52,52,.22) 62%)}
+.sub-lede{font-size:.85rem;color:var(--ink-dim);margin-bottom:2rem}
+
+/* Role lens */
+.lens{display:flex;gap:.5rem;align-items:center;margin-bottom:1.6rem;flex-wrap:wrap}
+.lens .lt{font-size:.62rem;text-transform:uppercase;letter-spacing:.1em;color:var(--ink-dim);margin-right:.3rem}
+.lens button{font-family:var(--sans);font-size:.74rem;font-weight:600;padding:.38rem .95rem;border-radius:18px;border:1.5px solid #c9c4b2;background:transparent;color:var(--ink-soft);cursor:pointer;transition:all .15s}
+.lens button.on{border-color:var(--accent);background:var(--accent);color:#fff}
+
+/* Briefing facts: each card belongs to roles */
+.facts{display:grid;grid-template-columns:repeat(3,1fr);gap:1rem}
+.fact{background:#fff;border:1px solid var(--paper2);border-radius:6px;padding:1.05rem 1.15rem;transition:opacity .25s, transform .25s;box-shadow:0 1px 0 rgba(20,22,29,.04)}
+.fact .who{font-family:var(--mono);font-size:.55rem;letter-spacing:.1em;text-transform:uppercase;color:var(--ink-dim);margin-bottom:.5rem}
+.fact .big{font-family:var(--serif);font-size:2rem;font-weight:700;line-height:1}
+.fact .big.c{color:var(--crit)}.fact .big.w{color:var(--warn)}.fact .big.g{color:var(--ok)}
+.fact .what{font-size:.8rem;margin-top:.35rem;line-height:1.45}
+.fact .go{display:inline-block;margin-top:.6rem;font-size:.68rem;font-weight:700;color:var(--accent);text-decoration:none}
+.fact .go:hover{text-decoration:underline}
+body.lens-on .fact{opacity:.28;transform:scale(.985)}
+body.lens-leader .fact[data-role~="leader"],body.lens-security .fact[data-role~="security"],body.lens-governance .fact[data-role~="governance"]{opacity:1;transform:scale(1)}
+
+/* Territory strip — perimeter visual */
+.territory{margin-top:2.2rem;background:#fff;border:1px solid var(--paper2);border-radius:6px;padding:1.2rem 1.3rem}
+.territory .tt{font-family:var(--mono);font-size:.58rem;letter-spacing:.12em;text-transform:uppercase;color:var(--ink-dim);margin-bottom:1rem}
+.terr-flex{display:flex;align-items:stretch;gap:0}
+.terr-inside{flex:1.1;border:2px dashed #b9b4a2;border-radius:8px;padding:.9rem 1rem;position:relative}
+.terr-inside .cap{position:absolute;top:-.6rem;left:.8rem;background:#fff;padding:0 .4rem;font-family:var(--mono);font-size:.56rem;letter-spacing:.1em;color:var(--ink-dim)}
+.chipset{display:flex;flex-wrap:wrap;gap:.4rem}
+.tchip{font-size:.66rem;font-weight:600;padding:.22rem .55rem;border-radius:4px;background:var(--accent-soft);color:var(--accent)}
+.tchip.loc{background:rgba(26,158,84,.1);color:var(--ok)}
+.terr-pipe{width:120px;display:flex;flex-direction:column;justify-content:center;gap:.5rem;padding:0 .6rem}
+.pipe{height:0;border-top:2px solid #c9c4b2;position:relative}
+.pipe::after{content:"";position:absolute;right:-1px;top:-4.5px;border:5px solid transparent;border-left-color:#c9c4b2}
+.pipe.fat{border-top-width:5px}.pipe.fat::after{top:-7px;border-width:7px;border-left-color:#c9c4b2}
+.pipe .pc{position:absolute;top:-1.05rem;width:100%;text-align:center;font-family:var(--mono);font-size:.58rem;color:var(--ink-dim)}
+.terr-out{flex:.9;display:flex;flex-direction:column;gap:.45rem;justify-content:center}
+.outrow{display:flex;justify-content:space-between;align-items:center;font-size:.74rem;padding:.34rem .65rem;border-radius:4px;background:var(--paper)}
+.outrow b{font-weight:700}
+.outrow .rg{font-family:var(--mono);font-size:.56rem;font-weight:700;padding:.05rem .3rem;border-radius:2px}
+.rg.us{background:rgba(196,124,17,.14);color:var(--warn)}
+.rg.eu{background:rgba(85,82,232,.12);color:var(--accent)}
+.descend{display:block;text-align:center;margin-top:2.4rem;font-family:var(--mono);font-size:.66rem;letter-spacing:.14em;text-transform:uppercase;color:var(--ink-dim);text-decoration:none}
+.descend:hover{color:var(--accent)}
+
+/* ============================================================
+   L1 — OVERVIEW (dusk)
+   ============================================================ */
+.L1{background:linear-gradient(180deg,#262b3c 0%,#1c212f 100%);color:#dde2f0;padding:3rem 2rem 3.6rem}
+.inner{max-width:980px;margin:0 auto}
+.depth-cap{font-family:var(--mono);font-size:.6rem;letter-spacing:.16em;text-transform:uppercase;color:#8a92ad;margin-bottom:1.6rem;display:flex;align-items:center;gap:.7rem}
+.depth-cap::after{content:"";flex:1;height:1px;background:currentColor;opacity:.25}
+.ov-grid{display:grid;grid-template-columns:1.25fr 1fr;gap:1rem}
+.ov-card{background:rgba(255,255,255,.045);border:1px solid rgba(255,255,255,.09);border-radius:10px;padding:1.1rem 1.2rem}
+.ov-card h3{font-size:.66rem;text-transform:uppercase;letter-spacing:.09em;color:#9aa2bd;margin-bottom:.85rem;font-weight:700}
+.lane{display:grid;grid-template-columns:120px 1fr 40px;gap:.7rem;align-items:center;padding:.3rem 0;font-size:.76rem;color:#c4cadd}
+.lane .bar{height:16px;border-radius:3px;display:flex;overflow:hidden;background:rgba(255,255,255,.06)}
+.lane .seg{min-width:14px;display:flex;align-items:center;justify-content:center;font-size:.56rem;font-weight:700;color:#fff}
+.seg.ok{background:rgba(34,197,94,.45)}.seg.warn{background:rgba(245,158,11,.6)}.seg.crit{background:rgba(239,68,68,.6)}
+.lane .cnt{text-align:right;font-weight:600;font-size:.72rem}
+.lane a{color:inherit;text-decoration:none}
+.lane a:hover{color:#fff;text-decoration:underline}
+.owner-row{display:flex;align-items:center;gap:.7rem;padding:.4rem 0;font-size:.76rem;color:#c4cadd}
+.owner-row .obar{flex:1;height:12px;background:rgba(255,255,255,.06);border-radius:3px;overflow:hidden}
+.owner-row .ofill{height:100%;background:var(--d-warn);opacity:.75}
+.spof{font-family:var(--mono);font-size:.52rem;font-weight:800;background:rgba(245,158,11,.16);color:var(--d-warn);padding:.08rem .3rem;border-radius:2px}
+.exits-mini{display:grid;grid-template-columns:repeat(3,1fr);gap:.6rem;margin-top:1rem}
+.exit-mini{background:rgba(255,255,255,.045);border:1px solid rgba(255,255,255,.09);border-radius:8px;padding:.7rem .8rem;font-size:.72rem;color:#c4cadd;text-decoration:none;display:block;transition:border-color .15s}
+.exit-mini:hover{border-color:var(--d-accent)}
+.exit-mini b{display:block;color:#eef1fa;font-size:.8rem}
+.exit-mini .n{font-family:var(--mono);font-size:.6rem;color:#8a92ad}
+
+/* ============================================================
+   L2 — SOLUTION (dark)
+   ============================================================ */
+.L2{background:var(--d-surface);color:var(--d-text);padding:3rem 2rem 3.6rem;border-top:1px solid #11141d}
+.sol-head{display:flex;justify-content:space-between;align-items:flex-start;gap:1rem;margin-bottom:1.1rem}
+.sol-head .nm{font-size:1.15rem;font-weight:800}
+.risk{font-size:.6rem;font-weight:700;padding:.14rem .5rem;border-radius:4px;vertical-align:middle}
+.risk.crit{background:rgba(239,68,68,.12);color:var(--d-crit)}
+.crumb{font-family:var(--mono);font-size:.6rem;color:var(--d-dim)}
+.crumb a{color:var(--d-muted);text-decoration:none}
+.sol-grid{display:grid;grid-template-columns:1.15fr 1fr;gap:1.3rem}
+.factstrip{font-family:var(--mono);font-size:.72rem;line-height:1.95;background:var(--d-surface2);border-radius:8px;padding:.7rem .95rem}
+.factstrip .k{color:var(--d-dim);display:inline-block;width:76px}
+.factstrip .reg{color:var(--d-warn)}
+.riskcard{border-left:3px solid var(--d-crit);background:rgba(239,68,68,.07);border-radius:6px;padding:.65rem .85rem;font-size:.76rem;margin:.55rem 0}
+.riskcard.w{border-left-color:var(--d-warn);background:rgba(245,158,11,.07)}
+.riskcard b{display:block;margin-bottom:.15rem}
+.riskcard .rb{color:var(--d-muted);font-size:.7rem}
+.kv{font-size:.74rem}
+.kv .row{display:grid;grid-template-columns:110px 1fr;padding:.26rem 0;border-bottom:1px solid var(--d-border)}
+.kv .row:last-child{border:none}
+.kv .k{color:var(--d-dim)}
+.h4{font-size:.62rem;font-weight:700;text-transform:uppercase;letter-spacing:.09em;color:var(--d-muted);margin:1rem 0 .5rem}
+.h4:first-child{margin-top:0}
+.evlink{display:inline-block;margin-top:1rem;font-size:.72rem;font-weight:700;color:var(--d-accent);text-decoration:none;font-family:var(--mono)}
+.evlink:hover{text-decoration:underline}
+
+/* ============================================================
+   L3 — EVIDENCE (terminal)
+   ============================================================ */
+.L3{background:#07080c;color:#c9d1e8;padding:3rem 2rem 4rem;border-top:1px solid #10131c}
+.term{max-width:980px;margin:0 auto;background:#0b0d13;border:1px solid #1d2233;border-radius:10px;overflow:hidden}
+.term-bar{display:flex;align-items:center;gap:.5rem;background:#10131c;padding:.55rem .9rem;font-family:var(--mono);font-size:.62rem;color:#5a6280}
+.term-bar .dot{width:9px;height:9px;border-radius:50%;background:#2a2f42}
+.term-body{padding:1rem 1.2rem;font-family:var(--mono);font-size:.72rem;line-height:1.85}
+.ln{display:grid;grid-template-columns:44px 1fr;gap:1rem}
+.ln .no{color:#39405a;text-align:right;user-select:none}
+.ln.hit{background:rgba(239,68,68,.08);border-left:2px solid var(--d-crit);margin-left:-2px}
+.ln.hit .no{color:var(--d-crit)}
+.tok-key{color:var(--d-crit);font-weight:700}
+.tok-str{color:#7ec699}
+.tok-kw{color:#7aa2f7}
+.tok-cm{color:#454c66}
+.ev-meta{margin-top:1rem;padding-top:.9rem;border-top:1px dashed #1d2233;font-size:.66rem;color:#5a6280;line-height:1.9}
+.ev-meta b{color:#8892aa}
+.surface-link{display:block;text-align:center;margin-top:2rem;font-family:var(--mono);font-size:.64rem;letter-spacing:.14em;text-transform:uppercase;color:#5a6280;text-decoration:none}
+.surface-link:hover{color:var(--d-accent)}
+
+@media (max-width:900px){
+  .rail{display:none}
+  .facts,.ov-grid,.sol-grid,.exits-mini{grid-template-columns:1fr}
+  .terr-flex{flex-direction:column}.terr-pipe{width:100%;flex-direction:row;padding:.6rem 0}
+}
+@media print{
+  .L1,.L2,.L3,.rail,.descend{display:none}
+  .L0{background:#fff}
+}
+</style>
+</head>
+<body>
+
+<!-- ===== DEPTH RAIL ===== -->
+<nav class="rail">
+  <div class="line"></div>
+  <a href="#l0" class="active">L0<span class="lbl">Briefing</span></a>
+  <a href="#l1">L1<span class="lbl">Overview</span></a>
+  <a href="#l2">L2<span class="lbl">Solution</span></a>
+  <a href="#l3">L3<span class="lbl">Evidence</span></a>
+</nav>
+
+<!-- ============================================================
+     L0 · FIELD BRIEFING (paper)
+     ============================================================ -->
+<section class="L0" id="l0">
+  <div class="sheet">
+    <div class="brief-head">
+      <div>
+        <div class="t1">AI <span>Scout</span> · Field Briefing</div>
+        <div class="stamp">NO DATA LEFT YOUR PERIMETER</div>
+      </div>
+      <div class="meta">
+        AI-developer-3 · main · 746 files<br>
+        2026-06-12 · Scout v0.8.2 · KB 2026.23<br>
+        static analysis · deterministic
+      </div>
+    </div>
+
+    <p class="lede">Your codebase runs <b>52 AI solutions</b>. Most are sound — but <b class="crit-u">2 expose live API keys</b>, <b>19 send data to US providers</b>, and every single one depends on <b>one person</b>.</p>
+    <div class="sub-lede">One sentence per finding, one click to the evidence. Choose your lens:</div>
+
+    <div class="lens">
+      <span class="lt">I am</span>
+      <button data-lens="leader">AI Leader / CEO</button>
+      <button data-lens="security">Security</button>
+      <button data-lens="governance">Governance</button>
+      <button data-lens="" class="on">Everyone</button>
+    </div>
+
+    <div class="facts">
+      <div class="fact" data-role="security">
+        <div class="who">Security</div>
+        <div class="big c">2</div>
+        <div class="what">solutions expose hardcoded API keys — rotate today.</div>
+        <a class="go" href="#l2">See which → </a>
+      </div>
+      <div class="fact" data-role="governance">
+        <div class="who">Governance</div>
+        <div class="big w">19</div>
+        <div class="what">solutions send data to US providers. DPA verified for 2 of 3 vendors.</div>
+        <a class="go" href="#l1">Exit-point map →</a>
+      </div>
+      <div class="fact" data-role="leader">
+        <div class="who">AI Leader</div>
+        <div class="big">52</div>
+        <div class="what">AI solutions in inventory; 3 new since last month's scan.</div>
+        <a class="go" href="#l1">Inventory →</a>
+      </div>
+      <div class="fact" data-role="leader governance">
+        <div class="who">AI Leader · Governance</div>
+        <div class="big w">100%</div>
+        <div class="what">of solutions were built by a single contributor — key-person risk.</div>
+        <a class="go" href="#l1">Owners →</a>
+      </div>
+      <div class="fact" data-role="leader">
+        <div class="who">AI Leader</div>
+        <div class="big">3×</div>
+        <div class="what">teams built the same RAG capability on different stacks — consolidation saves maintenance.</div>
+        <a class="go" href="#l1">Overlaps →</a>
+      </div>
+      <div class="fact" data-role="security governance">
+        <div class="who">Security · Governance</div>
+        <div class="big g">8</div>
+        <div class="what">solutions run fully local — zero data egress.</div>
+        <a class="go" href="#l1">Local stack →</a>
+      </div>
+    </div>
+
+    <!-- Territory strip -->
+    <div class="territory">
+      <div class="tt">Your AI territory — what stays in, what flows out</div>
+      <div class="terr-flex">
+        <div class="terr-inside">
+          <div class="cap">INSIDE YOUR PERIMETER</div>
+          <div class="chipset">
+            <span class="tchip">15 chatbots</span><span class="tchip">14 agents</span><span class="tchip">9 RAG</span>
+            <span class="tchip">7 fine-tuning</span><span class="tchip">5 MCP servers</span><span class="tchip">2 workflows</span>
+            <span class="tchip loc">Ollama · local</span><span class="tchip loc">Qdrant · local</span><span class="tchip loc">ChromaDB · local</span>
+          </div>
+        </div>
+        <div class="terr-pipe">
+          <div class="pipe fat"><span class="pc">14</span></div>
+          <div class="pipe"><span class="pc">7</span></div>
+          <div class="pipe"><span class="pc">5</span></div>
+        </div>
+        <div class="terr-out">
+          <div class="outrow"><span><b>OpenAI</b> · GPT-4o, embeddings</span><span class="rg us">US</span></div>
+          <div class="outrow"><span><b>Hugging Face</b> · inference API</span><span class="rg us">US</span></div>
+          <div class="outrow"><span><b>Tavily</b> · web search · no DPA</span><span class="rg us">US</span></div>
+        </div>
+      </div>
+    </div>
+
+    <a class="descend" href="#l1">▼ descend to overview</a>
+  </div>
+</section>
+
+<!-- ============================================================
+     L1 · OVERVIEW (dusk)
+     ============================================================ -->
+<section class="L1" id="l1">
+  <div class="inner">
+    <div class="depth-cap">Depth L1 · Overview — every number above, broken open</div>
+    <div class="ov-grid">
+      <div class="ov-card">
+        <h3>What was built · click a category to list its solutions</h3>
+        <div class="lane"><div><a href="#l2">Chatbot</a></div><div class="bar"><div class="seg ok" style="width:84%">13</div><div class="seg warn" style="width:16%">2</div></div><div class="cnt">15</div></div>
+        <div class="lane"><div><a href="#l2">AI Agents</a></div><div class="bar"><div class="seg ok" style="width:88%">12</div><div class="seg warn" style="width:12%">2</div></div><div class="cnt">14</div></div>
+        <div class="lane"><div><a href="#l2">RAG &amp; Search</a></div><div class="bar"><div class="seg ok" style="width:90%">8</div><div class="seg warn" style="width:10%">1</div></div><div class="cnt">9</div></div>
+        <div class="lane"><div><a href="#l2">Fine-tuning</a></div><div class="bar"><div class="seg ok" style="width:50%">3</div><div class="seg warn" style="width:25%">2</div><div class="seg crit" style="width:25%">2</div></div><div class="cnt">7</div></div>
+        <div class="lane"><div><a href="#l2">MCP servers</a></div><div class="bar"><div class="seg ok" style="width:60%">3</div><div class="seg warn" style="width:40%">2</div></div><div class="cnt">5</div></div>
+        <div class="lane"><div><a href="#l2">Workflows</a></div><div class="bar"><div class="seg ok" style="width:100%">2</div></div><div class="cnt">2</div></div>
+      </div>
+      <div class="ov-card">
+        <h3>Owners</h3>
+        <div class="owner-row"><div style="width:120px;font-weight:600">lukaskellerstein</div><div class="obar"><div class="ofill" style="width:100%"></div></div><div style="font-size:.68rem">52 · 100% <span class="spof">SPOF</span></div></div>
+        <div style="font-size:.64rem;color:#8a92ad;margin-top:.7rem">Ownership from git history at solution level. Per-person activity metrics are intentionally not collected.</div>
+        <h3 style="margin-top:1.3rem">Exit points · click for solutions per provider</h3>
+        <div class="exits-mini" style="grid-template-columns:1fr">
+          <a class="exit-mini" href="#l2"><b>OpenAI</b><span class="n">14 solutions · US · DPA ✓ · no training on API data</span></a>
+          <a class="exit-mini" href="#l2"><b>Hugging Face</b><span class="n">7 solutions · US · SOC 2 · self-host available</span></a>
+          <a class="exit-mini" href="#l2"><b>Tavily</b><span class="n">5 solutions · US · no enterprise DPA on standard tier</span></a>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ============================================================
+     L2 · SOLUTION (dark)
+     ============================================================ -->
+<section class="L2" id="l2">
+  <div class="inner">
+    <div class="depth-cap" style="color:var(--d-dim)">Depth L2 · Solution detail</div>
+    <div class="sol-head">
+      <div>
+        <div class="crumb"><a href="#l1">Fine-tuning</a> / </div>
+        <div class="nm">Mistral fine-tuning pipeline <span class="risk crit">CRITICAL</span></div>
+      </div>
+    </div>
+    <div class="sol-grid">
+      <div>
+        <div class="h4">Facts · deterministic</div>
+        <div class="factstrip">
+          <div><span class="k">Sources</span>database (SQL)</div>
+          <div><span class="k">Sinks</span>Hugging Face Inference API <span class="reg">(US)</span></div>
+          <div><span class="k">Pattern</span>fine-tuning pipeline</div>
+          <div><span class="k">Tech</span>transformers, PEFT</div>
+          <div><span class="k">Owner</span>lukaskellerstein</div>
+        </div>
+        <div class="h4">Risk analysis</div>
+        <div class="riskcard"><b>Hardcoded API key in source code</b><span class="rb">2 keys readable by anyone with repository access. Rotate immediately, move to a secret manager.</span></div>
+        <div class="riskcard w"><b>Training pipeline ingests production-like data</b><span class="rb">Training data carries higher privacy and IP-leakage risk than inference. Verify provenance and access controls.</span></div>
+        <a class="evlink" href="#l3">▼ open evidence — file &amp; line</a>
+      </div>
+      <div>
+        <div class="h4">Provider · KB 2026.23</div>
+        <div class="kv">
+          <div class="row"><span class="k">Vendor</span><span>Hugging Face, Inc.</span></div>
+          <div class="row"><span class="k">Residency</span><span>US · self-hosted available</span></div>
+          <div class="row"><span class="k">Training policy</span><span>inference data not stored beyond request</span></div>
+          <div class="row"><span class="k">Certifications</span><span>SOC 2 Type II</span></div>
+          <div class="row"><span class="k">Model lifecycle</span><span>mistral-v0.3 — supported</span></div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ============================================================
+     L3 · EVIDENCE (terminal)
+     ============================================================ -->
+<section class="L3" id="l3">
+  <div class="depth-cap" style="max-width:980px;margin:0 auto 1.4rem;color:#39405a">Depth L3 · Evidence — the line of code itself</div>
+  <div class="term">
+    <div class="term-bar"><span class="dot"></span><span class="dot"></span><span class="dot"></span>&nbsp;2_tools/mistral-v03-4bit-16bit.ipynb · finding f-8c41a2 · confidence 1.00</div>
+    <div class="term-body">
+      <div class="ln"><span class="no">45</span><span><span class="tok-kw">from</span> huggingface_hub <span class="tok-kw">import</span> login</span></div>
+      <div class="ln"><span class="no">46</span><span class="tok-cm"># TODO: move to env</span></div>
+      <div class="ln hit"><span class="no">47</span><span>login(token=<span class="tok-str">"</span><span class="tok-key">hf_qhzLG…LnAX</span><span class="tok-str">"</span>)  <span class="tok-cm">◀ hardcoded API key — redacted in this report</span></span></div>
+      <div class="ln"><span class="no">48</span><span></span></div>
+      <div class="ln"><span class="no">49</span><span><span class="tok-kw">from</span> transformers <span class="tok-kw">import</span> AutoModelForCausalLM</span></div>
+      <div class="ev-meta">
+        <b>Finding ID</b> f-8c41a2 · stable across scans &nbsp;·&nbsp; <b>Rule</b> SEC-KEY-001 v3 &nbsp;·&nbsp; <b>First seen</b> 2026-05-12 (2 scans ago) &nbsp;·&nbsp; <b>Commit</b> 4f9c21d · lukaskellerstein &nbsp;·&nbsp; <b>Open in GitHub ↗</b><br>
+        Every number in the briefing above resolves to evidence like this. That is the whole point.
+      </div>
+    </div>
+  </div>
+  <a class="surface-link" href="#l0">▲ surface to briefing</a>
+</section>
+
+<script>
+// Role lens — emphasizes facts for the chosen role
+const btns=document.querySelectorAll('.lens button');
+btns.forEach(b=>b.addEventListener('click',()=>{
+  btns.forEach(x=>x.classList.remove('on'));b.classList.add('on');
+  document.body.className='';
+  const l=b.dataset.lens;
+  if(l){document.body.classList.add('lens-on','lens-'+l);}
+}));
+// Depth rail active state on scroll
+const ids=['l0','l1','l2','l3'];const links=document.querySelectorAll('.rail a');
+const obs=new IntersectionObserver(es=>{es.forEach(e=>{if(e.isIntersecting){const i=ids.indexOf(e.target.id);links.forEach((a,j)=>a.classList.toggle('active',j===i));}})},{threshold:.35});
+ids.forEach(id=>obs.observe(document.getElementById(id)));
+</script>
+</body>
+</html>
