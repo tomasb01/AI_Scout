@@ -10,7 +10,7 @@ Sprint 1 added security hardening (prompt sanitisation, symlink skip, CLI
 validation). None of those should change what Scout *finds* or *classifies*
 for a clean repo — but "should" is not "does". This harness makes any drift
 immediately visible: if a future refactor silently stops detecting a
-provider, misgroups an asset, or shifts a risk score, the diff fails the
+provider, misgroups an asset, or shifts a risk status, the diff fails the
 build and the change has to be explicit.
 
 Updating the golden
@@ -79,7 +79,7 @@ def _normalise_stable(result, insights) -> dict:
     """Produce the *stable* snapshot — fields whose drift is a real regression.
 
     Stable = structural classification the user relies on:
-      * asset identity (name, type, provider, tags, task_types, risk_score)
+      * asset identity (name, type, provider, tags, task_types, risk_status)
       * raw findings (type + file_path + provider — NOT content text)
       * code context shape (function names, api call targets, env vars,
         prompt *count/length* not prompt text)
@@ -153,7 +153,7 @@ def _normalise_stable(result, insights) -> dict:
             "name": asset.name,
             "type": asset.type.value,
             "provider": provider_name,
-            "risk_score": round(asset.risk_score, 2),
+            "risk_status": asset.risk_status.value,
             "discovered_via": sorted(asset.discovered_via),
             "repository": asset.repository,
             "file_paths": sorted(asset.file_path.split(", ")),
@@ -322,3 +322,54 @@ def test_snapshot_is_deterministic():
     first3 = json.dumps(_run_pipeline(SPRINT3_FIXTURES), indent=2, sort_keys=True, ensure_ascii=False)
     second3 = json.dumps(_run_pipeline(SPRINT3_FIXTURES), indent=2, sort_keys=True, ensure_ascii=False)
     assert first3 == second3, "Sprint 3 pipeline output is not deterministic"
+
+
+# ── Sprint 0.1: stable IDs + bit-identical export ─────────────────────────
+
+
+def test_stable_ids_across_scans():
+    """Sprint 0.1: solution and finding IDs are deterministic hashes that
+    survive between scans — the precondition for diff (Sprint 2) and SARIF
+    fingerprints (Sprint 1). Datamodel spec §5: dvojí scan = identická
+    solution_id, finding_id."""
+    from aiscout.scanners.git_scanner import GitScanner
+
+    def ids(root):
+        result = GitScanner(repo_path=str(root)).scan()
+        sol = sorted(a.id for a in result.assets)
+        fin = sorted(f.id for a in result.assets for f in a.raw_findings)
+        return sol, fin
+
+    sol1, fin1 = ids(FIXTURES)
+    sol2, fin2 = ids(FIXTURES)
+    assert sol1 == sol2
+    assert fin1 == fin2
+    assert all(s.startswith("sol-") for s in sol1)
+    assert all(f.startswith("f-") for f in fin1)
+    assert fin1, "expected at least one finding in fixtures"
+    # IDs must be unique within a scan
+    assert len(set(fin1)) == len(fin1)
+    assert len(set(sol1)) == len(sol1)
+
+
+def test_json_export_bit_identical_with_timestamp_override(tmp_path, monkeypatch):
+    """Sprint 0.1 acceptance: two runs over the same inputs produce a
+    byte-identical JSON export when the timestamp is pinned via
+    AISCOUT_TIMESTAMP (the SOURCE_DATE_EPOCH pattern) — precondition for
+    signing and diff."""
+    from aiscout.report.json_export import JSONExporter
+    from aiscout.scanners.git_scanner import GitScanner
+
+    monkeypatch.setenv("AISCOUT_TIMESTAMP", "2026-07-07T12:00:00+00:00")
+
+    def export(path):
+        result = GitScanner(repo_path=str(FIXTURES)).scan()
+        analyze_assets(result.assets, str(FIXTURES))
+        build_data_flows(result.assets)
+        insights = enrich_assets(result.assets)
+        JSONExporter([result], output_path=str(path), insights=insights).generate()
+        return path.read_bytes()
+
+    first = export(tmp_path / "a.json")
+    second = export(tmp_path / "b.json")
+    assert first == second

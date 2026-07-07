@@ -7,6 +7,7 @@ from aiscout.models import (
     Finding,
     FindingType,
     ProviderInfo,
+    RiskStatus,
 )
 
 
@@ -63,8 +64,8 @@ def test_enrich_local_runtime_low_risk():
     # Ollama is local — should have info-level reason about no data egress
     info_reasons = [r for r in insight.risk_reasons if r.severity == "info"]
     assert any("local" in r.title.lower() or "no data egress" in r.title.lower() for r in info_reasons)
-    # Risk score should be low
-    assert asset.risk_score < 0.4
+    # Info-only evidence → no findings status
+    assert asset.risk_status == RiskStatus.NO_FINDINGS
 
 
 def test_enrich_framework_notes_downstream():
@@ -94,8 +95,8 @@ def test_enrich_external_api_data_residency():
     assert insight.provider_profile is not None
     assert insight.provider_profile.display_name == "OpenAI"
 
-    # Without PII/free-tier signal the score should land in the OK band
-    assert asset.risk_score < 0.40
+    # Without PII/free-tier signal there is nothing to review
+    assert asset.risk_status == RiskStatus.NO_FINDINGS
 
 
 def test_enrich_assets_returns_dict():
@@ -116,17 +117,17 @@ def test_provider_knowledge_base():
     assert unknown.name == "unknown"
 
 
-def test_risk_score_recalculated():
+def test_risk_status_rederived():
     asset = _make_asset("openai", findings=[
         Finding(type=FindingType.API_KEY_DETECTED, file_path="x.py",
                 content="sk-abc", redacted_content="sk-...bc", provider="openai"),
         Finding(type=FindingType.IMPORT_DETECTED, file_path="x.py",
                 content="import openai", provider="openai"),
     ])
-    asset.risk_score = 0.0  # start at zero
+    asset.risk_status = RiskStatus.NO_FINDINGS  # stale scanner seed
     enrich_asset(asset)
-    # Should be recalculated based on reasons (critical + warnings)
-    assert asset.risk_score > 0.4
+    # Re-derived from reasons: hardcoded key → critical
+    assert asset.risk_status == RiskStatus.CRITICAL
 
 
 # ── Sprint 2: task_type + tag derivation ─────────────────────────────────
@@ -219,7 +220,7 @@ def test_pii_with_free_tier_provider_is_critical():
     assert any("Personal data" in r.title for r in critical), (
         "PII + provider with 'may be used' training policy should escalate to critical"
     )
-    assert asset.risk_score >= 0.70
+    assert asset.risk_status == RiskStatus.CRITICAL
 
 
 def test_plain_anthropic_inference_is_not_warning():
@@ -229,7 +230,7 @@ def test_plain_anthropic_inference_is_not_warning():
     insight = enrich_asset(asset)
     warnings = [r for r in insight.risk_reasons if r.severity == "warning"]
     assert not warnings, f"Unexpected warnings: {[r.title for r in warnings]}"
-    assert asset.risk_score < 0.40
+    assert asset.risk_status == RiskStatus.NO_FINDINGS
 
 
 def test_mcp_server_vs_client_severity():
@@ -349,10 +350,12 @@ def test_mcp_client_not_misclassified_as_server():
     assert not _asset_is_mcp_server(asset)
 
 
-def test_risk_score_floors_match_severity():
-    from aiscout.engine.enrichment import _calculate_risk_score, RiskReason
-    assert _calculate_risk_score([RiskReason("critical", "t", "d")]) >= 0.70
-    assert _calculate_risk_score([RiskReason("warning", "t", "d")]) >= 0.40
-    assert _calculate_risk_score([RiskReason("warning", "t", "d")]) < 0.70
-    assert _calculate_risk_score([RiskReason("info", "t", "d")]) < 0.40
-    assert _calculate_risk_score([]) == 0.10
+def test_risk_status_derivation_matches_severity():
+    from aiscout.engine.enrichment import _derive_risk_status, RiskReason
+    assert _derive_risk_status([RiskReason("critical", "t", "d")]) == RiskStatus.CRITICAL
+    assert _derive_risk_status(
+        [RiskReason("critical", "t", "d"), RiskReason("warning", "t", "d")]
+    ) == RiskStatus.CRITICAL
+    assert _derive_risk_status([RiskReason("warning", "t", "d")]) == RiskStatus.REVIEW
+    assert _derive_risk_status([RiskReason("info", "t", "d")]) == RiskStatus.NO_FINDINGS
+    assert _derive_risk_status([]) == RiskStatus.NO_FINDINGS

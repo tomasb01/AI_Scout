@@ -15,9 +15,12 @@ from .assets import (
     FlowSink,
     FlowSource,
     ProviderInfo,
+    RiskStatus,
     ScannerConfig,
     ScanResult,
+    Severity,
     TaskType,
+    now_utc,
 )
 
 __all__ = [
@@ -28,11 +31,17 @@ __all__ = [
     "Confidence",
     "DataCategory",
     "DataFlow",
+    "DataFlowMap",
     "Documentation",
     "Finding",
     "FindingType",
+    "FlowSink",
+    "FlowSource",
     "ProviderInfo",
+    "RiskStatus",
     "ScannerConfig",
     "ScanResult",
+    "Severity",
     "TaskType",
+    "now_utc",
 ]

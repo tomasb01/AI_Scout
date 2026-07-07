@@ -4,6 +4,12 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
+# KB version, shown in the report header next to the Scout version so every
+# report is traceable to the knowledge it was built with (spec v13 §3.2,
+# datamodel spec scan.kb_version). Format: <year>.<ISO week> of the last
+# content change; bump on every KB edit.
+KB_VERSION = "2026.28"
+
 
 @dataclass(frozen=True)
 class ProviderProfile:

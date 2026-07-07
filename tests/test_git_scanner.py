@@ -4,7 +4,7 @@ import json
 import tempfile
 from pathlib import Path
 
-from aiscout.models import FindingType
+from aiscout.models import FindingType, RiskStatus
 from aiscout.scanners.git_scanner import GitScanner, _redact_key
 
 
@@ -97,7 +97,7 @@ def test_group_findings():
     assets = scanner._group_findings_into_assets(findings, "test-repo")
     # All in root dir → grouped into one solution
     assert len(assets) == 1
-    assert assets[0].risk_score == 0.7  # has API key
+    assert assets[0].risk_status == RiskStatus.CRITICAL  # has API key
 
     # Files in DIFFERENT directories → separate solution assets
     findings2 = [

@@ -97,8 +97,6 @@ class LLMEngine:
             try:
                 result = self.classify(asset)
                 asset.data_classification = result
-                if result.risk_score > 0:
-                    asset.risk_score = max(asset.risk_score, result.risk_score)
             except Exception as e:
                 console.print(
                     f"  [yellow]Warning:[/] LLM classification failed for "
@@ -276,11 +274,12 @@ Based on the code analysis above, describe this AI solution. Return a JSON objec
 - "summary": 2-3 sentences describing what this solution DOES, what data it processes, and its purpose. Be specific — mention the actual functionality, not just the framework.
 - "data_categories": list from: "public", "internal", "confidential", "pii", "financial", "source_code", "unknown"
 - "confidence": "high", "medium", or "low"
-- "risk_score": float 0.0-1.0 (0=safe, 1=critical risk)
 - "recommendations": list of 2-3 actionable recommendations
 
+Describe evidence only — what the code does and what data it touches. Do not rate, score, or judge overall risk.
+
 Example:
-{"summary": "Voice transcription pipeline that records customer calls, transcribes audio via Whisper API, extracts key topics using GPT-4, and stores results in PostgreSQL. Processes audio recordings containing personal customer information.", "data_categories": ["pii", "internal"], "confidence": "high", "risk_score": 0.6, "recommendations": ["Ensure customer consent for call recording", "Add PII redaction before storing transcripts"]}
+{"summary": "Voice transcription pipeline that records customer calls, transcribes audio via Whisper API, extracts key topics using GPT-4, and stores results in PostgreSQL. Processes audio recordings containing personal customer information.", "data_categories": ["pii", "internal"], "confidence": "high", "recommendations": ["Ensure customer consent for call recording", "Add PII redaction before storing transcripts"]}
 
 Return ONLY the JSON object.""")
 
@@ -374,21 +373,15 @@ Return ONLY the JSON object.""")
         except ValueError:
             confidence = Confidence.LOW
 
-        # Parse risk score
-        try:
-            risk_score = float(data.get("risk_score", 0.0))
-            risk_score = max(0.0, min(1.0, risk_score))
-        except (TypeError, ValueError):
-            risk_score = 0.0
-
-        # Build details
+        # Build details. A "risk_score" key, if the model still returns one,
+        # is deliberately ignored — the LLM contributes evidence (categories,
+        # summary), never a verdict (spec v13 §9.3).
         summary = data.get("summary", "")
         recommendations = data.get("recommendations", [])
 
         return ClassificationResult(
             categories=categories,
             confidence=confidence,
-            risk_score=risk_score,
             details=summary,
             recommendations=recommendations,
         )

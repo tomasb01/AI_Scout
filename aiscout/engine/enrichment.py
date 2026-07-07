@@ -11,7 +11,14 @@ from aiscout.knowledge.dependency_advisories import (
     find_advisories,
 )
 from aiscout.knowledge.providers import ProviderProfile, get_provider
-from aiscout.models import AIAsset, Finding, FindingType, TaskType
+from aiscout.models import (
+    AIAsset,
+    DataCategory,
+    Finding,
+    FindingType,
+    RiskStatus,
+    TaskType,
+)
 
 
 @dataclass
@@ -64,31 +71,29 @@ def enrich_asset(asset: AIAsset) -> AssetInsight:
     if asset.data_classification and asset.data_classification.recommendations:
         recommendations = asset.data_classification.recommendations
 
-    # Sprint 4 — surface the LLM's own risk read as a visible risk reason
-    # so the asset's final score and the reasons list stay in sync. The
-    # LLM's score no longer silently overrides the rule-based score;
-    # instead, a high LLM verdict injects a warning-level reason that
-    # flows through the normal aggregator and shows up under "Risk
-    # reasons" in the report.
-    if asset.data_classification and asset.data_classification.risk_score >= 0.5:
-        llm_sev = "critical" if asset.data_classification.risk_score >= 0.8 else "warning"
+    # Sprint 0.1 — the LLM contributes evidence (data categories), never a
+    # verdict. Sensitive categories it identifies become a warning-level
+    # reason that flows through the same derivation as rule-based reasons,
+    # so the displayed status always matches the displayed reasons.
+    llm_sensitive = _llm_sensitive_categories(asset)
+    if llm_sensitive:
+        cats = ", ".join(sorted(c.value for c in llm_sensitive))
         llm_detail = (
             asset.data_classification.details
-            or "LLM review flagged this asset as higher risk — review summary for context."
+            or "LLM data classification identified sensitive categories."
         )
         risk_reasons.append(RiskReason(
-            severity=llm_sev,
-            title="LLM review flagged elevated risk",
+            severity="warning",
+            title=f"LLM classified processed data as sensitive ({cats})",
             detail=llm_detail[:400],
         ))
 
     category = _classify_category(asset)
     solution_name = _derive_solution_display_name(asset, category)
 
-    # Risk score: rule-based score from all reasons (including the
-    # optional synthetic LLM reason above). This keeps the displayed
-    # number consistent with the displayed reasons.
-    asset.risk_score = _calculate_risk_score(risk_reasons)
+    # Categorical status derived from all reasons (including the optional
+    # LLM evidence above) — single source of truth for the report.
+    asset.risk_status = _derive_risk_status(risk_reasons)
 
     return AssetInsight(
         summary=summary,
@@ -1870,36 +1875,32 @@ def _is_generic_role(role: str) -> bool:
 # ── Risk score calculation ────────────────────────────────────────────────
 
 
-def _calculate_risk_score(reasons: list[RiskReason]) -> float:
-    """Calculate a weighted risk score with explicit severity floors.
+_LLM_SENSITIVE_CATEGORIES = {
+    DataCategory.PII, DataCategory.FINANCIAL, DataCategory.CONFIDENTIAL,
+}
 
-    Sprint 3 change — instead of summing fractional weights (which let
-    5 "info" lines add up to a warning-level score), we use explicit
-    floors keyed on severity plus a small additive contribution so
-    multiple issues of the same class still stack:
 
-      * any ``critical``  → score ≥ 0.70, +0.10 per extra critical
-      * any ``warning``   → score ≥ 0.40, +0.05 per extra warning
-      * only ``info``     → score ≤ 0.25, +0.02 per info
-      * nothing           → 0.10 (AI code with no audit signals)
+def _llm_sensitive_categories(asset: AIAsset) -> set[DataCategory]:
+    """Sensitive data categories reported by the (optional) LLM pass."""
+    if not asset.data_classification:
+        return set()
+    return _LLM_SENSITIVE_CATEGORIES.intersection(asset.data_classification.categories)
 
-    This produces a cleaner bimodal-to-trimodal distribution: plain
-    inference assets sit in the 0.10-0.25 range ("OK"), assets that
-    need review land in 0.40-0.60 ("Warning"), and concrete incidents
-    start at 0.70 ("Critical").
+
+def _derive_risk_status(reasons: list[RiskReason]) -> RiskStatus:
+    """Derive the categorical solution status from risk reasons.
+
+    Sprint 0.1 — replaces the weighted score (spec v13: evidence, not
+    verdict). The mapping is intentionally simple and auditable:
+
+      * any ``critical`` reason → CRITICAL (a concrete incident exists)
+      * any ``warning`` reason  → REVIEW (needs a human decision)
+      * only ``info`` / none    → NO_FINDINGS (inventory evidence only —
+        an absence of findings, never an "OK" verdict)
     """
-    if not reasons:
-        return 0.10
-
-    crit = sum(1 for r in reasons if r.severity == "critical")
-    warn = sum(1 for r in reasons if r.severity == "warning")
-    info = sum(1 for r in reasons if r.severity == "info")
-
-    if crit:
-        score = 0.70 + 0.10 * (crit - 1) + 0.03 * warn
-    elif warn:
-        score = 0.40 + 0.05 * (warn - 1) + 0.02 * info
-    else:
-        score = 0.10 + 0.02 * info
-
-    return min(1.0, max(0.0, round(score, 2)))
+    severities = {r.severity for r in reasons}
+    if "critical" in severities:
+        return RiskStatus.CRITICAL
+    if "warning" in severities:
+        return RiskStatus.REVIEW
+    return RiskStatus.NO_FINDINGS

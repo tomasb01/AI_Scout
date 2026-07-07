@@ -103,7 +103,7 @@
         }
       ],
       "repository": "fixtures",
-      "risk_score": 0.7,
+      "risk_status": "critical",
       "tags": [
         "chatbot"
       ],
@@ -239,7 +239,7 @@
         }
       ],
       "repository": "fixtures",
-      "risk_score": 0.48,
+      "risk_status": "review",
       "tags": [
         "chatbot",
         "fine_tuning",
@@ -324,7 +324,7 @@
         }
       ],
       "repository": "fixtures",
-      "risk_score": 0.52,
+      "risk_status": "review",
       "tags": [
         "rag"
       ],
@@ -375,7 +375,7 @@
         }
       ],
       "repository": "fixtures",
-      "risk_score": 0.12,
+      "risk_status": "no_findings",
       "tags": [
         "local_model"
       ],

@@ -215,10 +215,9 @@ async def _run_scan(scan_id: str, config: dict):
                 log(f"Classifying {len(all_assets)} solution(s) via {mode} ({model})...")
                 for i, asset in enumerate(all_assets):
                     try:
-                        result = await asyncio.to_thread(engine.classify, asset)
-                        asset.data_classification = result
-                        if result.risk_score > 0:
-                            asset.risk_score = max(asset.risk_score, result.risk_score)
+                        asset.data_classification = await asyncio.to_thread(
+                            engine.classify, asset
+                        )
                     except Exception as e:
                         log(f"LLM failed for '{asset.name}': {e}", "warning")
 

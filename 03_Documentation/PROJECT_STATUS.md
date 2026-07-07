@@ -157,6 +157,7 @@ Architecture documents: `02_Architecture/`
 | v0.6.x | Apr 12-15 | Sprints 1-4: security, task_types, MCP, dep advisories, CI/CD, LLM e2e |
 | **v0.7.0** | **Apr 20** | **Sprint 5: Data Flow Mapper, DataFlowMap models, overlap fingerprinting, 116 tests** |
 | _(branch)_ | May 21 | GitHub org/user enumeration (`--org`), manifest-only mode, GitHub Coverage report section, developer guardrail (`aiscout check` + pre-commit hook + Action template). 139 tests |
+| **v0.8.0** | **Jul 7** | **Sprint 0.1: stable IDs (sol-/f- hashes), severity × confidence + categorical risk_status (weighted risk_score removed), "No findings" wording, Scout+KB version in header, Scope & Limitations section, schema_version 1.1.0 in JSON, bit-identical output via AISCOUT_TIMESTAMP. 141 tests** |
 
 ---
 

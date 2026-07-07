@@ -128,7 +128,7 @@
         }
       ],
       "repository": "sprint2",
-      "risk_score": 0.48,
+      "risk_status": "review",
       "tags": [
         "chatbot",
         "fine_tuning",

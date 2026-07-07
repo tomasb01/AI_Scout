@@ -43,7 +43,7 @@
         }
       ],
       "repository": "sprint3",
-      "risk_score": 0.12,
+      "risk_status": "no_findings",
       "tags": [
         "local_model"
       ],
@@ -123,7 +123,7 @@
         }
       ],
       "repository": "sprint3",
-      "risk_score": 0.52,
+      "risk_status": "review",
       "tags": [
         "rag"
       ],

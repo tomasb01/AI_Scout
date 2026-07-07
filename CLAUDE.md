@@ -3,7 +3,7 @@
 Enterprise AI Discovery & Security Assessment Tool.
 Self-hosted, open-source (BSL), CLI + Web UI.
 
-**Current status: v0.7.0** — functional end-to-end product, 5 sprints completed, ~116 tests passing.
+**Current status: v0.8.0** — functional end-to-end product, 5 sprints + Sprint 0.1 (stable IDs, risk-status model) completed, ~141 tests passing.
 Full status: `03_Documentation/PROJECT_STATUS.md` · Sprint detail: `03_Documentation/SPRINT_LOG.md`
 
 ## What is this
@@ -126,7 +126,7 @@ AI_Scout/
 ├── examples/ai-scout-guardrail.yml     # GitHub Action template for the guardrail
 ├── landing/                            # Landing page + screenshots
 ├── api/ · scripts/
-└── tests/                              # ~139 tests across 11 files
+└── tests/                              # ~141 tests across 11 files
 ```
 
 ### GitHub org scanning & developer guardrail

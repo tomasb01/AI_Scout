@@ -10,6 +10,7 @@ from aiscout.models import (
     DataCategory,
     Finding,
     FindingType,
+    RiskStatus,
     ScanResult,
 )
 
@@ -30,7 +31,7 @@ def test_ai_asset_defaults():
     asset = AIAsset(name="test")
     assert asset.type == AssetType.CUSTOM_CODE
     assert asset.owner == "unknown"
-    assert asset.risk_score == 0.0
+    assert asset.risk_status == RiskStatus.NO_FINDINGS
     assert asset.raw_findings == []
 
 
@@ -79,7 +80,7 @@ def test_classification_result_defaults():
     cr = ClassificationResult()
     assert cr.categories == []
     assert cr.confidence == Confidence.LOW
-    assert cr.risk_score == 0.0
+    assert cr.details == ""
 
 
 def test_data_category_values():

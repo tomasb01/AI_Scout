@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import hashlib
 import json
 import os
 import re
@@ -9,7 +10,6 @@ import stat
 import tempfile
 import tomllib
 from collections import defaultdict
-from datetime import datetime, timezone
 from pathlib import Path
 
 import git
@@ -21,8 +21,11 @@ from aiscout.models import (
     Finding,
     FindingType,
     ProviderInfo,
+    RiskStatus,
     ScannerConfig,
     ScanResult,
+    Severity,
+    now_utc,
 )
 from aiscout.scanners.base import BaseScanner
 
@@ -144,6 +147,53 @@ _EVALUATION_MARKERS = re.compile(
     r"Trainer\.evaluate|lm-eval|lm_eval"
     r")\b"
 )
+
+# ── Finding rules (Sprint 0.1) ────────────────────────────────────────────
+# FindingType → (rule_id, rule_version, severity). Confidence is 1.0 for all
+# of these: each is a deterministic pattern/AST match, i.e. an observable
+# fact (datamodel spec §1.4), not a judgment. The rule id + version feed the
+# stable finding ID and, later, SARIF rule metadata (Sprint 1).
+_FINDING_RULES: dict[FindingType, tuple[str, int, Severity]] = {
+    FindingType.API_KEY_DETECTED: ("SEC-KEY-001", 1, Severity.CRITICAL),
+    FindingType.IMPORT_DETECTED: ("DISC-IMP-001", 1, Severity.INFO),
+    FindingType.DEPENDENCY_DETECTED: ("DISC-DEP-001", 1, Severity.INFO),
+    FindingType.CONFIG_DETECTED: ("DISC-CFG-001", 1, Severity.INFO),
+    FindingType.LOCAL_MODEL_DETECTED: ("DISC-MDL-001", 1, Severity.INFO),
+    FindingType.CONTAINER_DETECTED: ("DISC-CTR-001", 1, Severity.INFO),
+}
+
+
+def _stable_hash(*parts: str) -> str:
+    """First 12 hex chars of SHA-256 over '|'-joined parts."""
+    return hashlib.sha256("|".join(parts).encode("utf-8")).hexdigest()[:12]
+
+
+def _assign_stable_ids(findings: list[Finding], repo_name: str) -> None:
+    """Assign rule metadata + stable IDs once the repo is known.
+
+    finding_id = f-<hash>(repo | rule_id | file:line | provider) — stable
+    across scans as long as the finding itself doesn't move (datamodel spec
+    §2.2). Provider is included because one line can legitimately carry two
+    findings of the same rule (e.g. two SDK imports on one line).
+    """
+    for f in findings:
+        rule_id, rule_version, severity = _FINDING_RULES.get(
+            f.type, ("GEN-000", 1, Severity.INFO)
+        )
+        f.rule_id = rule_id
+        f.rule_version = rule_version
+        f.severity = severity
+        if f.line_number is not None:
+            # Line-anchored: content is deliberately NOT hashed — a rotated
+            # key on the same line is still the same finding.
+            location = f"{f.file_path}:{f.line_number}"
+        else:
+            # No line (dependency manifests, MCP/config entries): the
+            # content is the position within the file — without it, two
+            # entries in one config would collide.
+            location = f"{f.file_path}:{_stable_hash(f.content)[:8]}"
+        f.id = "f-" + _stable_hash(repo_name, rule_id, location, f.provider)
+
 
 # ── AI Import Patterns ────────────────────────────────────────────────────
 # provider -> list of regex patterns (compiled at module load)
@@ -329,7 +379,7 @@ class GitScanner(BaseScanner):
         return "Git Repository Scanner"
 
     def scan(self, **kwargs) -> ScanResult:
-        started_at = datetime.now(timezone.utc)
+        started_at = now_utc()
         all_findings: list[Finding] = []
         files_scanned = 0
         repo_name = ""
@@ -431,7 +481,7 @@ class GitScanner(BaseScanner):
             return ScanResult(
                 scanner="git_scanner",
                 started_at=started_at,
-                completed_at=datetime.now(timezone.utc),
+                completed_at=now_utc(),
                 assets=assets,
                 metadata={
                     "repository": repo_name,
@@ -446,7 +496,7 @@ class GitScanner(BaseScanner):
             return ScanResult(
                 scanner="git_scanner",
                 started_at=started_at,
-                completed_at=datetime.now(timezone.utc),
+                completed_at=now_utc(),
                 errors=[f"Scan failed for {repo_name or self.repo_url or self.repo_path}: {e}"],
                 metadata={"repository": repo_name},
             )
@@ -949,6 +999,8 @@ class GitScanner(BaseScanner):
         This way, different tools in the same directory are one solution,
         and same provider in different directories are separate solutions.
         """
+        _assign_stable_ids(findings, repo_name)
+
         # Group by solution directory
         by_solution: dict[str, list[Finding]] = defaultdict(list)
         for f in findings:
@@ -979,13 +1031,15 @@ class GitScanner(BaseScanner):
                 f.type == FindingType.CONTAINER_DETECTED for f in dir_findings
             )
 
-            risk = 0.3
+            # Scanner-level seed for the categorical status; enrichment
+            # re-derives it from the full set of risk reasons (data flow,
+            # advisories, LLM categories) as the single source of truth.
             if has_api_keys:
-                risk = 0.7
-            if has_mcp:
-                risk = max(risk, 0.5)
-            if has_local_model:
-                risk = max(risk, 0.4)
+                risk_status = RiskStatus.CRITICAL
+            elif has_mcp or has_local_model:
+                risk_status = RiskStatus.REVIEW
+            else:
+                risk_status = RiskStatus.NO_FINDINGS
 
             asset_type = AssetType.CUSTOM_CODE
             if has_mcp:
@@ -1002,10 +1056,15 @@ class GitScanner(BaseScanner):
             all_provider_names = [get_provider(p).display_name for p in providers]
 
             assets.append(AIAsset(
+                # Stable solution ID: repo + normalized root path. Sprint 0.3
+                # (aggregation boundary) will promote the root path from
+                # directory to aggregation root — accepted one-time ID
+                # re-baseline; see the note on AIAsset.id in models/assets.py.
+                id="sol-" + _stable_hash(repo_name, solution_dir),
                 name=solution_name,
                 type=asset_type,
                 provider=provider_info,
-                risk_score=risk,
+                risk_status=risk_status,
                 discovered_via=["git_scanner"],
                 repository=repo_name,
                 file_path=", ".join(file_paths),
@@ -1028,7 +1087,14 @@ class GitScanner(BaseScanner):
                     if cleaned and cleaned != a.name:
                         a.name = f"{a.name} — {cleaned}"
 
-        return sorted(assets, key=lambda a: a.risk_score, reverse=True)
+        # Deterministic order: status first (critical → review → no
+        # findings), then case-insensitive name — never insertion order.
+        status_order = {
+            RiskStatus.CRITICAL: 0, RiskStatus.REVIEW: 1, RiskStatus.NO_FINDINGS: 2,
+        }
+        return sorted(
+            assets, key=lambda a: (status_order[a.risk_status], a.name.lower(), a.id)
+        )
 
 
 # ── Module-level helpers ──────────────────────────────────────────────────

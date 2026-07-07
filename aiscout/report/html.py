@@ -9,8 +9,12 @@ from jinja2 import Environment, PackageLoader
 
 from aiscout import __version__
 from aiscout.engine.enrichment import AssetInsight, _deduplicate_tech_stack, enrich_assets
-from aiscout.knowledge.providers import get_provider
-from aiscout.models import AIAsset, FindingType, ScanResult
+from aiscout.knowledge.providers import KB_VERSION, get_provider
+from aiscout.models import AIAsset, FindingType, RiskStatus, ScanResult
+
+_STATUS_ORDER = {
+    RiskStatus.CRITICAL: 0, RiskStatus.REVIEW: 1, RiskStatus.NO_FINDINGS: 2,
+}
 
 
 class ReportGenerator:
@@ -63,13 +67,16 @@ class ReportGenerator:
         if self.insights is None:
             self.insights = enrich_assets(all_assets)
 
-        # Sort by risk score descending (enrichment may have updated scores)
-        all_assets.sort(key=lambda a: a.risk_score, reverse=True)
+        # Deterministic order: status (critical → review → no findings),
+        # then name — enrichment may have updated statuses.
+        all_assets.sort(
+            key=lambda a: (_STATUS_ORDER[a.risk_status], a.name.lower(), a.id)
+        )
 
-        # Risk counts
-        critical = sum(1 for a in all_assets if a.risk_score >= 0.7)
-        warning = sum(1 for a in all_assets if 0.4 <= a.risk_score < 0.7)
-        ok = sum(1 for a in all_assets if a.risk_score < 0.4)
+        # Status counts
+        critical = sum(1 for a in all_assets if a.risk_status == RiskStatus.CRITICAL)
+        warning = sum(1 for a in all_assets if a.risk_status == RiskStatus.REVIEW)
+        ok = sum(1 for a in all_assets if a.risk_status == RiskStatus.NO_FINDINGS)
 
         # Cross-repo overlap detection
         provider_repos: dict[str, set[str]] = defaultdict(set)
@@ -155,6 +162,7 @@ class ReportGenerator:
 
         return {
             "version": __version__,
+            "kb_version": KB_VERSION,
             "scan_date": scan_date,
             "repos": repos,
             "total_assets": len(all_assets),
@@ -344,7 +352,7 @@ class ReportGenerator:
             insight = self.insights.get(asset.id) if self.insights else None
             if not insight:
                 continue
-            risk = self._get_risk_class(asset.risk_score)
+            risk = self._get_risk_class(asset.risk_status)
             for d in insight.data_involved:
                 data_counts[d]["count"] += 1
                 if risk in ("warning", "critical"):
@@ -404,8 +412,8 @@ class ReportGenerator:
         # Risk
         if critical_count:
             points.append(
-                f"**{critical_count} solutions** with critical risk "
-                f"(hardcoded API keys, sensitive data) — requires immediate attention."
+                f"**{critical_count} solutions** with critical findings "
+                f"(hardcoded API keys, sensitive data egress) — requires immediate attention."
             )
 
         # Data egress
@@ -482,7 +490,7 @@ class ReportGenerator:
                 "group": cat,
                 "color": cat_colors.get(cat, "#8b8fa3"),
                 "size": max(6, min(18, len(asset.raw_findings) * 2)),
-                "risk": self._get_risk_class(asset.risk_score),
+                "risk": self._get_risk_class(asset.risk_status),
             })
 
         # Edges: overlap (same name) + shared tech stack
@@ -585,9 +593,12 @@ class ReportGenerator:
         return re.sub(r'\*\*(.+?)\*\*', r'<strong>\1</strong>', text)
 
     @staticmethod
-    def _get_risk_class(score: float) -> str:
-        if score >= 0.7:
+    def _get_risk_class(status: RiskStatus | str) -> str:
+        """Map risk_status → CSS class. Class names predate the categorical
+        model ("warning"/"ok" style the same slots as review/no-findings);
+        display labels live in the template."""
+        if status == RiskStatus.CRITICAL:
             return "critical"
-        if score >= 0.4:
+        if status == RiskStatus.REVIEW:
             return "warning"
         return "ok"

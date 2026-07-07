@@ -21,7 +21,7 @@ from aiscout.engine.data_flow import build_data_flows
 from aiscout.engine.enrichment import enrich_assets
 from aiscout.engine.llm import LLMEngine
 from aiscout.knowledge.providers import get_provider
-from aiscout.models import FindingType
+from aiscout.models import FindingType, RiskStatus
 from aiscout.report.html import ReportGenerator
 from aiscout.scanners.git_scanner import GitScanner
 from aiscout.scanners.github_org import OrgEnumerationError, enumerate_org_repos
@@ -194,10 +194,7 @@ def scan(
                 task = progress.add_task("LLM classification...", total=len(all_assets))
                 for asset in all_assets:
                     try:
-                        result = engine.classify(asset)
-                        asset.data_classification = result
-                        if result.risk_score > 0:
-                            asset.risk_score = max(asset.risk_score, result.risk_score)
+                        asset.data_classification = engine.classify(asset)
                     except Exception as e:
                         console.print(
                             f"  [yellow]Warning:[/] Classification failed for "
@@ -493,8 +490,8 @@ def _print_summary(scan_results: list, report_path: Path):
     table.add_column("Repository", style="bold")
     table.add_column("Assets", justify="center")
     table.add_column("Critical", justify="center", style="red")
-    table.add_column("Warning", justify="center", style="yellow")
-    table.add_column("OK", justify="center", style="green")
+    table.add_column("Review", justify="center", style="yellow")
+    table.add_column("No findings", justify="center", style="green")
     table.add_column("Errors", justify="center")
 
     total_assets = 0
@@ -505,9 +502,9 @@ def _print_summary(scan_results: list, report_path: Path):
     for result in scan_results:
         repo = result.metadata.get("repository", "unknown")
         n = len(result.assets)
-        crit = sum(1 for a in result.assets if a.risk_score >= 0.7)
-        warn = sum(1 for a in result.assets if 0.4 <= a.risk_score < 0.7)
-        ok = sum(1 for a in result.assets if a.risk_score < 0.4)
+        crit = sum(1 for a in result.assets if a.risk_status == RiskStatus.CRITICAL)
+        warn = sum(1 for a in result.assets if a.risk_status == RiskStatus.REVIEW)
+        ok = sum(1 for a in result.assets if a.risk_status == RiskStatus.NO_FINDINGS)
 
         table.add_row(repo, str(n), str(crit), str(warn), str(ok), str(len(result.errors)))
         total_assets += n

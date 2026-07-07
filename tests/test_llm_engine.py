@@ -18,7 +18,6 @@ from aiscout.models import (
 VALID_LLM_RESPONSE = json.dumps({
     "data_categories": ["internal", "source_code"],
     "confidence": "medium",
-    "risk_score": 0.5,
     "summary": "OpenAI integration for code analysis.",
     "recommendations": ["Move API key to env var"],
 })
@@ -53,7 +52,6 @@ def test_classify_ollama(httpx_mock):
     assert DataCategory.INTERNAL in result.categories
     assert DataCategory.SOURCE_CODE in result.categories
     assert result.confidence == Confidence.MEDIUM
-    assert result.risk_score == 0.5
     assert "OpenAI" in result.details
 
 
@@ -68,7 +66,6 @@ def test_classify_openai(httpx_mock):
     result = engine.classify(_make_asset())
 
     assert result.confidence == Confidence.MEDIUM
-    assert result.risk_score == 0.5
 
 
 def test_classify_openai_vllm_url(httpx_mock):
@@ -98,7 +95,6 @@ def test_classify_openai_retries_without_response_format(httpx_mock):
     )
     engine = LLMEngine(mode="openai", url="http://tgi:8080")
     result = engine.classify(_make_asset())
-    assert result.risk_score == 0.5
 
 
 def test_classify_parse_failure(httpx_mock):

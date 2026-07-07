@@ -8,7 +8,8 @@ from datetime import datetime
 from pathlib import Path
 
 from aiscout.engine.enrichment import AssetInsight
-from aiscout.models import AIAsset, ScanResult
+from aiscout.knowledge.providers import KB_VERSION
+from aiscout.models import AIAsset, RiskStatus, ScanResult, now_utc
 
 
 class JSONExporter:
@@ -53,10 +54,10 @@ class JSONExporter:
                 "completed_at": result.completed_at.isoformat() if result.completed_at else None,
             })
 
-        # Risk counts
-        critical = sum(1 for a in all_assets if a.risk_score >= 0.7)
-        warning = sum(1 for a in all_assets if 0.4 <= a.risk_score < 0.7)
-        ok = sum(1 for a in all_assets if a.risk_score < 0.4)
+        # Status counts
+        critical = sum(1 for a in all_assets if a.risk_status == RiskStatus.CRITICAL)
+        warning = sum(1 for a in all_assets if a.risk_status == RiskStatus.REVIEW)
+        ok = sum(1 for a in all_assets if a.risk_status == RiskStatus.NO_FINDINGS)
 
         # Build solutions
         solutions = [self._asset_to_dict(asset) for asset in all_assets]
@@ -138,13 +139,21 @@ class JSONExporter:
         overlaps.sort(key=lambda x: -x["count"])
 
         return {
+            # Aditive evolution only from here on: new fields/enum values may
+            # be added; existing meaning never changes below a major bump
+            # (datamodel spec §1.1-1.2).
+            "schema_version": "1.1.0",
             "scout_version": _scout_version(),
-            "generated_at": datetime.utcnow().isoformat() + "Z",
+            "kb_version": KB_VERSION,
+            "mode": "llm_enriched" if any(
+                a.data_classification for a in all_assets
+            ) else "static",
+            "generated_at": now_utc().isoformat(),
             "summary": {
                 "total_solutions": len(all_assets),
                 "critical": critical,
-                "warning": warning,
-                "ok": ok,
+                "review": warning,
+                "no_findings": ok,
                 "files_scanned": total_files,
                 "repositories_scanned": len(repos),
                 "unique_categories": len(categories),
@@ -175,8 +184,7 @@ class JSONExporter:
             "file_count": len(asset.file_path.split(", ")) if asset.file_path else 0,
             "owner": asset.owner if asset.owner != "unknown" else None,
             "users": asset.users,
-            "risk_score": round(asset.risk_score, 3),
-            "risk_level": _risk_level(asset.risk_score),
+            "risk_status": asset.risk_status.value,
             "task_types": [t.value for t in getattr(asset, "task_types", [])],
             "tags": list(getattr(asset, "tags", [])),
             "dependencies": asset.dependencies,
@@ -212,7 +220,11 @@ class JSONExporter:
         # Findings (without raw API key contents — they're already redacted)
         result["findings"] = [
             {
+                "id": f.id,
                 "type": f.type.value,
+                "rule": {"id": f.rule_id, "version": f.rule_version},
+                "severity": f.severity.value,
+                "confidence": f.confidence,
                 "file_path": f.file_path,
                 "line_number": f.line_number,
                 "content": f.redacted_content if f.redacted_content else f.content,
@@ -229,7 +241,6 @@ class JSONExporter:
                 "categories": [c.value for c in dc.categories],
                 "confidence": dc.confidence.value if hasattr(dc.confidence, "value") else str(dc.confidence),
                 "details": dc.details,
-                "risk_score": dc.risk_score,
                 "recommendations": dc.recommendations,
             }
 
@@ -237,14 +248,6 @@ class JSONExporter:
 
 
 # ── Helpers ────────────────────────────────────────────────────────────────
-
-
-def _risk_level(score: float) -> str:
-    if score >= 0.7:
-        return "critical"
-    if score >= 0.4:
-        return "warning"
-    return "ok"
 
 
 def _scout_version() -> str:
