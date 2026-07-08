@@ -381,6 +381,25 @@ Zadání: Spec v13 §3.4 + QA spec. Cíl: report počítá aplikace, ne adresá�
 
 ---
 
+## Validační milník po Sprintu 0 (8. července 2026)
+
+Scan tří reálných rep (AI-developer-3, AI-Agents-2 — výuková; Fleurdin_AI — reálná aplikace), celkem 1 633 souborů. První běh odhalil dvě kalibrační chyby detektoru:
+
+1. **Veto přebily artefakty uvnitř lekcí** — výuková repa nesou lockfily/Dockerfile/testy jako výukový materiál (`1-Intro/3_RNN/uv.lock`, `3_N8N/Dockerfile`). Fix: produkční signály se počítají jen z repo-level umístění (root, root `tests/`, `.github/workflows`; přidán Procfile/fly.toml).
+2. **Tvar ≠ výuka** — Fleurdin_AI (reálná appka) má číslované adresáře jako fáze pipeline (`4-RAG_Pipeline`, `5-Backend`); tvarové signály samy o sobě by ji složily. Fix: tutorial klasifikace vyžaduje aspoň jeden sémantický signál (lesson slova v adresářích / course README).
+
+**Výsledek po fixu: 258 → 12 řešení.**
+
+| Repo | Před | Po | Charakter |
+|------|------|-----|-----------|
+| AI-developer-3 | 141 | **1** („teaching collection, 144 examples", 439 findingů, critical zachován) | tutorial_example / high |
+| AI-Agents-2 | 107 | **1** („teaching collection, 118 examples", 308 findingů) | tutorial_example / high |
+| Fleurdin_AI | 10 | **10** (reálná aplikace — beze změny) | unknown / low |
+
+Exec summary je poprvé důvěryhodné: „Found 12 AI solutions" místo 258; SPOF insight říká smysluplné „One contributor created 10 of 12 solutions (83%)" místo šumu z lekcí. +2 regresní testy zachycující oba poznatky.
+
+---
+
 ## Otevřené body
 
 1. **Report redesign** — implementovat vybranou variantu (nebo mix) jako nový `report.html.j2`

@@ -53,7 +53,8 @@ Detailní stav: `03_Documentation/PROJECT_STATUS.md` · pro AI asistenty: `CLAUD
 | 0.1 | Stabilní ID + risk status model | datamodel spec §1–§2 | ✅ **hotový** (v0.8.0) |
 | 0.2 | QA vrstva reportu (insighty, linter, fact strip) | QA spec | ✅ **hotový** (v0.9.0) |
 | 0.3 | Agregační hranice + detektor tutorial/produkce + install | QA spec + Spec v13 §3.4 | ✅ **hotový** (v0.10.0) |
-| **→** | **Validační sken reálné org přes `--org` (100+ řešení)** | validační milník z Vývojového plánu | ⏳ **← jsme tady** |
+| → | Validační sken reálných rep (258 → 12 řešení; kalibrace detektoru) | validační milník z Vývojového plánu | ✅ hotový (viz SPRINT_LOG) |
+| **1** | **SARIF export** | Spec v13 §15 | ⏳ **← další na řadě** |
 | 1 | SARIF export | Spec v13 §15 | ⏳ (odemčeno — stabilní ID hotové) |
 | 2 | Diff / trend režim | datamodel spec (finding stavy) | ⏳ |
 | 3 | MCP & Agent scanner (launch feature) | Spec v13 §15 | ⏳ |
@@ -80,4 +81,4 @@ uv run aiscout scan --local tests/fixtures --no-llm -o report.html   # ukázka v
 uv run aiscout scan --local tests/fixtures_tutorial --no-llm -o t.html  # tutorial collapse demo
 ```
 
-Další práce = **validační milník po Sprintu 0**: scan reálné Git organizace (100+ řešení) přes `--org` — jediný způsob, jak ověřit agregační hranici a skutečný tvar org dat před investicí do Sprintů 1–3 (SARIF → diff → MCP scanner). Paralelně: threat model dokument + veřejné repo/README (kvalita reportu je po Sprintu 0 obhajitelná).
+Validační milník proběhl (8. 7. 2026, 3 reálná repa, 258 → 12 řešení — detail v SPRINT_LOG). Další práce = **Sprint 1: SARIF export** (findings → SARIF 2.1.0, fingerprint ze stabilních ID, zobrazení v GitHub/GitLab security tabech). Paralelně: threat model dokument + veřejné repo/README (kvalita reportu je po Sprintu 0 obhajitelná).

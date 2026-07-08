@@ -111,23 +111,29 @@ def detect_repo_character(
     if readme_text and _README_COURSE_RE.search(readme_text[:4000]):
         signals.append(SIGNAL_README_COURSE)
 
-    # ── Production-shaped evidence ──────────────────────────────────────
-    names = {p.name for p in paths}
+    # ── Production-shaped evidence — REPO-LEVEL locations only ──────────
+    # Validated on real teaching repos (AI-developer-3, AI-Agents-2): the
+    # lessons themselves ship lockfiles, Dockerfiles and test files as
+    # teaching material. Deploy evidence only counts when it sits at the
+    # repo root, in a root-level tests/ directory, or in CI config —
+    # artifacts nested inside solution directories say nothing about the
+    # repo being an operated application.
+    root_names = {p.name for p in paths if len(p.parts) == 1}
     path_strs = [str(p) for p in paths]
     if any(
         s.startswith(".github/workflows/") or s.startswith(".gitlab-ci")
-        or p.name == ".gitlab-ci.yml"
-        for s, p in zip(path_strs, paths)
+        for s in path_strs
     ):
         signals.append(SIGNAL_HAS_CI)
     if any(
-        part in ("tests", "test") for p in paths for part in p.parts[:-1]
-    ) or any(p.name.startswith("test_") for p in paths):
+        len(p.parts) > 1 and p.parts[0] in ("tests", "test") for p in paths
+    ) or any(n.startswith("test_") for n in root_names):
         signals.append(SIGNAL_HAS_TESTS)
-    if names & {"Dockerfile", "Containerfile", "docker-compose.yml",
-                "docker-compose.yaml", "compose.yml", "compose.yaml"}:
+    if root_names & {"Dockerfile", "Containerfile", "docker-compose.yml",
+                     "docker-compose.yaml", "compose.yml", "compose.yaml",
+                     "Procfile", "fly.toml"}:
         signals.append(SIGNAL_HAS_CONTAINER)
-    if names & _LOCKFILES:
+    if root_names & _LOCKFILES:
         signals.append(SIGNAL_HAS_LOCKFILE)
 
     return _classify(signals, n_dirs, notebooks, n_files)
@@ -140,16 +146,30 @@ def _classify(
         SIGNAL_SEQUENTIAL_NAMING, SIGNAL_LESSON_KEYWORDS,
         SIGNAL_MANY_SMALL_DIRS, SIGNAL_NOTEBOOK_HEAVY, SIGNAL_README_COURSE,
     } & set(signals)
+    # Semantic signals say "teaching"; shape signals (sequential naming,
+    # many small dirs) are shared by real apps whose pipeline stages are
+    # numbered folders — shape alone must never collapse a production
+    # repo (validated on Fleurdin_AI).
+    semantic_signals = {
+        SIGNAL_LESSON_KEYWORDS, SIGNAL_README_COURSE,
+    } & set(signals)
     production_signals = {
         SIGNAL_HAS_CI, SIGNAL_HAS_TESTS, SIGNAL_HAS_CONTAINER,
         SIGNAL_HAS_LOCKFILE,
     } & set(signals)
 
-    # Tutorial: strong positive evidence and no production counterweight.
-    # A course repo that *also* ships CI stays unknown — a human decides.
-    if len(tutorial_signals) >= 3 and not production_signals:
+    # Tutorial: strong positive evidence including at least one semantic
+    # signal, and no production counterweight. A course repo that *also*
+    # ships repo-level CI/deploy stays unknown — a human decides.
+    if (
+        len(tutorial_signals) >= 3 and semantic_signals
+        and not production_signals
+    ):
         return RepoCharacter(KIND_TUTORIAL, "high", sorted(signals))
-    if len(tutorial_signals) == 2 and not production_signals and n_dirs >= 8:
+    if (
+        len(tutorial_signals) == 2 and semantic_signals
+        and not production_signals and n_dirs >= 8
+    ):
         return RepoCharacter(KIND_TUTORIAL, "medium", sorted(signals))
 
     # Experiment: notebook-dominated scratch work, small, nothing deployable.

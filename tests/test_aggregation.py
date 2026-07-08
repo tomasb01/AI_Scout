@@ -49,6 +49,30 @@ def test_production_signals_veto_tutorial():
     assert result.kind != KIND_TUTORIAL
 
 
+def test_nested_deploy_artifacts_do_not_veto_tutorial():
+    """Validated on AI-developer-3 / AI-Agents-2: lessons ship lockfiles,
+    Dockerfiles and tests as teaching material — deploy evidence counts
+    only at repo level."""
+    files = [f"{i:02d}-lesson-x/example.py" for i in range(1, 11)]
+    files += [
+        "03-lesson-x/uv.lock", "05-lesson-x/Dockerfile",
+        "07-lesson-x/test/test_tool.py",
+    ]
+    dirs = [f"{i:02d}-lesson-x" for i in range(1, 11)]
+    result = detect_repo_character(files, dirs, readme_text="# AI Course")
+    assert result.kind == KIND_TUTORIAL
+
+
+def test_shape_alone_never_collapses_a_real_app():
+    """Validated on Fleurdin_AI: numbered pipeline folders (0-Scripts,
+    4-RAG_Pipeline, 5-Backend) are a real-app convention — without a
+    semantic teaching signal the repo must not classify as tutorial."""
+    files = [f"{i}-stage/main.py" for i in range(9)]
+    dirs = [f"{i}-stage" for i in range(9)]
+    result = detect_repo_character(files, dirs, readme_text="")
+    assert result.kind != KIND_TUTORIAL
+
+
 def test_detects_production_repo():
     files = [
         "api/app.py", "api/llm.py", ".github/workflows/deploy.yml",
