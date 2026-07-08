@@ -1,0 +1,316 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>AI Scout — Visibility. Efficiency. Security.</title>
+<style>
+:root{--bg:#0f1117;--surface:#1a1d27;--surface2:#242736;--border:#2e3146;--text:#e1e4ed;--text-muted:#8b8fa3;--text-dim:#5c6078;--accent:#6366f1;--accent-bg:rgba(99,102,241,0.12);--ok:#22c55e;--warning:#f59e0b;--critical:#ef4444;--blue:#3b82f6;--purple:#a855f7}
+*{margin:0;padding:0;box-sizing:border-box}
+body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',system-ui,sans-serif;background:var(--bg);color:var(--text);line-height:1.6}
+a{color:var(--accent);text-decoration:none}a:hover{text-decoration:underline}
+.wrap{max-width:1100px;margin:0 auto;padding:0 2rem}
+
+/* Nav */
+nav{max-width:1100px;margin:0 auto;padding:1.2rem 2rem;display:flex;justify-content:space-between;align-items:center}
+nav .logo{font-size:1.1rem;font-weight:700}nav .logo span{color:var(--accent)}
+nav .links{display:flex;gap:1.5rem;font-size:.85rem;align-items:center}
+nav .links a{color:var(--text-muted)}nav .links a:hover{color:var(--text);text-decoration:none}
+.btn-nav{background:var(--accent);color:#fff !important;padding:.4rem 1rem;border-radius:6px;font-weight:600;font-size:.8rem}
+
+/* Hero */
+.hero{max-width:1100px;margin:0 auto;padding:5rem 2rem 3rem;text-align:center}
+.hero h1{font-size:2.8rem;font-weight:800;line-height:1.15;margin-bottom:1rem}
+.hero h1 .accent{color:var(--accent)}
+.motto{font-size:1rem;color:var(--accent);margin-bottom:.5rem;letter-spacing:.08em;text-transform:uppercase;font-weight:600}
+.hero p{font-size:1.05rem;color:var(--text-muted);max-width:620px;margin:0 auto 2rem;line-height:1.7}
+.hero-btns{display:flex;gap:1rem;justify-content:center;flex-wrap:wrap}
+.btn-primary{background:var(--accent);color:#fff;padding:.65rem 1.8rem;border-radius:8px;font-weight:600;font-size:.9rem;transition:all .15s;border:none;cursor:pointer;display:inline-block}
+.btn-primary:hover{opacity:.9;transform:translateY(-1px);text-decoration:none}
+.btn-secondary{background:transparent;border:1px solid var(--border);color:var(--text);padding:.65rem 1.8rem;border-radius:8px;font-weight:600;font-size:.9rem;transition:all .15s;display:inline-block}
+.btn-secondary:hover{border-color:var(--accent);text-decoration:none}
+
+/* Trust */
+.trust{max-width:1100px;margin:0 auto;padding:1.5rem 2rem;text-align:center}
+.trust-items{display:flex;justify-content:center;gap:2rem;flex-wrap:wrap;font-size:.8rem;color:var(--text-muted)}
+
+/* Screenshots */
+.screenshots{max-width:1100px;margin:0 auto;padding:3rem 2rem}
+.screenshots h2{text-align:center;font-size:1.6rem;margin-bottom:.4rem}
+.screenshots .sub{text-align:center;color:var(--text-muted);margin-bottom:2rem;font-size:.9rem}
+.ss-grid{display:flex;flex-direction:column;gap:1.5rem}
+.ss-item{background:var(--surface);border:1px solid var(--border);border-radius:10px;overflow:hidden}
+.ss-item img{width:100%;display:block}
+.ss-caption{padding:.8rem 1.2rem;font-size:.8rem;color:var(--text-muted);border-top:1px solid var(--border)}
+.ss-caption strong{color:var(--text)}
+.ss-row{display:grid;grid-template-columns:1fr 1fr;gap:1.5rem}
+@media(max-width:768px){.ss-row{grid-template-columns:1fr}}
+
+/* Roles */
+.roles{max-width:1100px;margin:0 auto;padding:3rem 2rem}
+.roles h2{text-align:center;font-size:1.6rem;margin-bottom:2rem}
+.role-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:1rem}
+@media(max-width:768px){.role-grid{grid-template-columns:repeat(2,1fr)}}
+.role{background:var(--surface);border:1px solid var(--border);border-radius:8px;padding:1.2rem;text-align:center}
+.role .r-icon{font-size:1.8rem;margin-bottom:.5rem}
+.role h3{font-size:.85rem;margin-bottom:.6rem;color:var(--accent)}
+.role ul{list-style:none;font-size:.75rem;color:var(--text-muted);text-align:left}
+.role li{padding:.15rem 0}
+.role li::before{content:"→ ";color:var(--accent)}
+
+/* Features */
+.features{max-width:1100px;margin:0 auto;padding:3rem 2rem}
+.features h2{text-align:center;font-size:1.6rem;margin-bottom:.4rem}
+.features .sub{text-align:center;color:var(--text-muted);margin-bottom:2rem;font-size:.9rem}
+.feature-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:1rem}
+@media(max-width:768px){.feature-grid{grid-template-columns:1fr}}
+.feature{background:var(--surface);border:1px solid var(--border);border-radius:8px;padding:1.2rem}
+.feature h3{font-size:.85rem;margin-bottom:.3rem}
+.feature p{font-size:.78rem;color:var(--text-muted);line-height:1.5}
+
+/* How */
+.how{max-width:1100px;margin:0 auto;padding:3rem 2rem}
+.how h2{text-align:center;font-size:1.6rem;margin-bottom:2rem}
+.steps{display:flex;gap:0}
+@media(max-width:768px){.steps{flex-direction:column;gap:1rem}}
+.step{flex:1;text-align:center;padding:0 1.2rem;position:relative}
+.step-num{width:36px;height:36px;border-radius:50%;background:var(--accent-bg);border:2px solid var(--accent);color:var(--accent);display:flex;align-items:center;justify-content:center;font-weight:700;margin:0 auto .6rem;font-size:.85rem}
+.step h3{font-size:.85rem;margin-bottom:.2rem}
+.step p{font-size:.78rem;color:var(--text-muted)}
+
+/* Pricing */
+.pricing{max-width:1100px;margin:0 auto;padding:3rem 2rem}
+.pricing h2{text-align:center;font-size:1.6rem;margin-bottom:2rem}
+.pricing-grid{display:grid;grid-template-columns:1fr 1fr;gap:1.5rem;max-width:750px;margin:0 auto}
+@media(max-width:600px){.pricing-grid{grid-template-columns:1fr}}
+.plan{background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:1.8rem;position:relative}
+.plan.featured{border-color:var(--accent);box-shadow:0 0 30px rgba(99,102,241,0.08)}
+.plan-badge{position:absolute;top:-10px;right:16px;background:var(--accent);color:#fff;font-size:.6rem;font-weight:700;padding:.15rem .5rem;border-radius:4px;text-transform:uppercase}
+.plan h3{font-size:1rem;margin-bottom:.3rem}
+.plan .price{font-size:1.8rem;font-weight:800;margin-bottom:.8rem}
+.plan .price span{font-size:.8rem;font-weight:400;color:var(--text-muted)}
+.plan ul{list-style:none;margin-bottom:1.2rem}
+.plan li{font-size:.8rem;padding:.2rem 0;color:var(--text-muted)}
+.plan li::before{content:"✓ ";color:var(--ok);font-weight:700}
+.plan li.soon{color:var(--text-dim)}
+.plan li.soon::before{content:"◇ ";color:var(--accent)}
+.btn-plan{display:block;text-align:center;padding:.55rem;border-radius:6px;font-weight:600;font-size:.8rem}
+.btn-plan.primary{background:var(--accent);color:#fff}
+.btn-plan.secondary{background:transparent;border:1px solid var(--border);color:var(--text-muted)}
+
+/* CTA */
+.cta{max-width:1100px;margin:0 auto;padding:3rem 2rem;text-align:center}
+.cta-box{background:linear-gradient(135deg,#1e2235,#161929);border:1px solid var(--accent);border-radius:10px;padding:2.5rem 2rem;box-shadow:0 0 30px rgba(99,102,241,0.06)}
+.cta h2{font-size:1.3rem;margin-bottom:.4rem}
+.cta p{color:var(--text-muted);margin-bottom:1.2rem;font-size:.9rem}
+
+footer{max-width:1100px;margin:0 auto;padding:1.5rem 2rem;text-align:center;border-top:1px solid var(--border);color:var(--text-dim);font-size:.7rem}
+</style>
+</head>
+<body>
+
+<nav>
+  <div class="logo"><span>AI</span> Scout</div>
+  <div class="links">
+    <a href="#features">Features</a>
+    <a href="#roles">Who it's for</a>
+    <a href="#pricing">Pricing</a>
+    <a href="https://github.com/tomasb01/AI_Scout" target="_blank">GitHub</a>
+    <a href="/app" class="btn-nav">Try Demo</a>
+  </div>
+</nav>
+
+<!-- ═══ HERO ═══ -->
+<section class="hero">
+  <div class="motto">Visibility · Efficiency · Security</div>
+  <h1>Know every <span class="accent">AI solution</span><br>in your organization</h1>
+  <p>AI Scout discovers, maps, and assesses all AI solutions across your codebase. Self-hosted. Transparent. No data leaves your perimeter.</p>
+  <div class="hero-btns">
+    <a href="/app" class="btn-primary">Try Free Scan</a>
+    <a href="https://github.com/tomasb01/AI_Scout" class="btn-secondary" target="_blank">View on GitHub</a>
+  </div>
+</section>
+
+<section class="trust">
+  <div class="trust-items">
+    <span>🔒 Self-hosted</span>
+    <span>📖 Open-source core</span>
+    <span>🏠 Your LLM, your data</span>
+    <span>🔌 18+ AI providers</span>
+  </div>
+</section>
+
+<!-- ═══ SCREENSHOTS ═══ -->
+<section class="screenshots" id="demo">
+  <h2>See what AI Scout reveals</h2>
+  <p class="sub">Real output from scanning a multi-repo organization</p>
+
+  <div class="ss-grid">
+    <div class="ss-item">
+      <img src="/screenshots/graph.png" alt="AI Solutions Map — Tech Stack View" onerror="this.style.display='none'">
+      <div class="ss-caption"><strong>AI Solutions Map</strong> — Interactive graph showing how solutions relate through shared tech stack. Click categories to filter. Drag nodes to explore.</div>
+    </div>
+    <div class="ss-row">
+      <div class="ss-item">
+        <img src="/screenshots/dashboard.png" alt="Solutions Dashboard" onerror="this.style.display='none'">
+        <div class="ss-caption"><strong>Solutions Dashboard</strong> — Categories, repo breakdown, tech stack, data involved, risk & compliance flags. Filter by category, risk, or repo.</div>
+      </div>
+      <div class="ss-item">
+        <img src="/screenshots/detail.png" alt="Solution Detail" onerror="this.style.display='none'">
+        <div class="ss-caption"><strong>Solution Detail</strong> — Risk analysis, data flow, provider info, recommendations, direct links to source code on GitHub.</div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ═══ WHO IT'S FOR ═══ -->
+<section class="roles" id="roles">
+  <h2>Who it's for</h2>
+  <p class="sub">From startups to large enterprises</p>
+  <div class="role-grid">
+    <div class="role">
+      <div class="r-icon">📋</div>
+      <h3>CEO / Board</h3>
+      <ul>
+        <li>Executive summary</li>
+        <li>AI solution count vs. known</li>
+        <li>Consolidation savings</li>
+        <li>Risk overview at a glance</li>
+      </ul>
+    </div>
+    <div class="role">
+      <div class="r-icon">📐</div>
+      <h3>CTO / IT Leader</h3>
+      <ul>
+        <li>Full AI landscape visibility</li>
+        <li>Duplicate solution detection</li>
+        <li>Tech stack concentration</li>
+        <li>Vendor dependency analysis</li>
+      </ul>
+    </div>
+    <div class="role">
+      <div class="r-icon">⚙️</div>
+      <h3>IT / DevOps</h3>
+      <ul>
+        <li>AI asset catalog</li>
+        <li>Hardcoded key detection</li>
+        <li>Author & SPOF tracking</li>
+        <li>Multi-repo scanning</li>
+      </ul>
+    </div>
+    <div class="role">
+      <div class="r-icon">🛡️</div>
+      <h3>CISO / Security</h3>
+      <ul>
+        <li>Data exit points & residency</li>
+        <li>PII exposure map</li>
+        <li>Compliance gap count</li>
+        <li>Audit-ready reports</li>
+      </ul>
+    </div>
+  </div>
+</section>
+
+<!-- ═══ FEATURES ═══ -->
+<section class="features" id="features">
+  <h2>What AI Scout finds</h2>
+  <p class="sub">One scan. Complete visibility.</p>
+  <div class="feature-grid">
+    <div class="feature">
+      <h3>🔍 AI Discovery</h3>
+      <p>Every AI integration — imports, API keys, dependencies, prompts, model configs. 18+ providers supported.</p>
+    </div>
+    <div class="feature">
+      <h3>🧠 Deep Code Analysis</h3>
+      <p>AST parsing reveals what each solution does. Not "uses OpenAI" but "customer support chatbot using GPT-4".</p>
+    </div>
+    <div class="feature">
+      <h3>🔁 Overlap Detection</h3>
+      <p>Find duplicate solutions across teams. "8 teams built the same thing" — real consolidation opportunity.</p>
+    </div>
+    <div class="feature">
+      <h3>⚠️ Risk Assessment</h3>
+      <p>Hardcoded keys, data egress without DPA, PII in pipelines — flagged with specific recommendations.</p>
+    </div>
+    <div class="feature">
+      <h3>👥 Author & SPOF</h3>
+      <p>Who built what. One developer maintains 70% of AI solutions? That's a single-point-of-failure.</p>
+    </div>
+    <div class="feature">
+      <h3>📊 Interactive Dashboard</h3>
+      <p>Graph visualization, category breakdown, tech radar, data sensitivity heatmap. Auto-generated executive summary.</p>
+    </div>
+  </div>
+</section>
+
+<!-- ═══ HOW IT WORKS ═══ -->
+<section class="how">
+  <h2>How it works</h2>
+  <div class="steps">
+    <div class="step">
+      <div class="step-num">1</div>
+      <h3>Point at your repos</h3>
+      <p>Enter Git URLs or connect your GitHub org</p>
+    </div>
+    <div class="step">
+      <div class="step-num">2</div>
+      <h3>AI Scout analyzes</h3>
+      <p>AST parsing, code context extraction, optional LLM enrichment</p>
+    </div>
+    <div class="step">
+      <div class="step-num">3</div>
+      <h3>Get your AI map</h3>
+      <p>Interactive report with every solution, risk, and what to do about it</p>
+    </div>
+  </div>
+</section>
+
+<!-- ═══ PRICING ═══ -->
+<section class="pricing" id="pricing">
+  <h2>Pricing</h2>
+  <div class="pricing-grid">
+    <div class="plan">
+      <h3>Community</h3>
+      <div class="price">Free</div>
+      <ul>
+        <li>AI Discovery Engine</li>
+        <li>Deep Code Analysis</li>
+        <li>Interactive Dashboard</li>
+        <li>Overlap Detection</li>
+        <li>Local LLM (Ollama)</li>
+        <li>Multi-repo scanning</li>
+      </ul>
+      <a href="/app" class="btn-plan secondary">Start Scanning</a>
+    </div>
+    <div class="plan featured">
+      <div class="plan-badge">Coming Soon</div>
+      <h3>Pro</h3>
+      <div class="price">TBA</div>
+      <ul>
+        <li>Everything in Community</li>
+        <li class="soon">Data Flow Mapper</li>
+        <li class="soon">Security Analyzer</li>
+        <li class="soon">Gap Analyzer</li>
+        <li class="soon">Continuous Monitoring</li>
+        <li class="soon">Remediation Roadmap</li>
+      </ul>
+      <a href="mailto:info@aiscout.dev" class="btn-plan primary">Get in Touch</a>
+    </div>
+  </div>
+</section>
+
+<!-- ═══ CTA ═══ -->
+<section class="cta">
+  <div class="cta-box">
+    <h2>See what AI is really running in your organization</h2>
+    <p>First scan takes 2 minutes. No signup required.</p>
+    <a href="/app" class="btn-primary">Try Free Scan →</a>
+  </div>
+</section>
+
+<footer>
+  AI Scout — Visibility. Efficiency. Security. | Open-source (BSL-1.1) | © 2026
+</footer>
+
+</body>
+</html>
