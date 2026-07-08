@@ -420,6 +420,10 @@ Feedback Tomáše po validaci: identita řešení musí být **účel → tech s
 
 AI-developer-3: 127 řešení (z 141 dir-assetů; merge jen prokázané varianty), AI-Agents-2: 102, Fleurdin: 12 + 4× dependency evidence. **Každé řešení má účelové jméno, smysluplnou kategorii a cestu.** Čísla jsou vyšší než u kapitolového kolapsu — vědomě: výukové repo reálně obsahuje ~100 různých toků a granularita je hodnota produktu; badge „tutorial/example repo" dává kontext. 267 testů passing.
 
+### Přehled + granularita: strukturální skupiny v tabulce (`_build_table_groups`)
+
+Čistě prezentační vrstva nad granulárními řešeními: u rep s ≥ 10 řešeními se řádky tabulky seskupí podle top-level adresáře (skupina od 3 členů), header nese cestu + počet + critical/review badge. Skupiny bez critical jsou defaultně sbalené; klik rozbaluje; **aktivní filtr kolaps ignoruje** (výsledek filtru není nikdy schovaný). Identity, ID a počty nedotčené. Validace: 3 repa → 18 skupin, 15 sbalených — 241 řádků čte jako seznam kapitol/větví, každé řešení jeden klik daleko. 268 testů.
+
 ---
 
 ## Otevřené body

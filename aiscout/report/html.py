@@ -17,6 +17,14 @@ _STATUS_ORDER = {
     RiskStatus.CRITICAL: 0, RiskStatus.REVIEW: 1, RiskStatus.NO_FINDINGS: 2,
 }
 
+# Structural grouping of the solutions table (presentation only — the
+# solutions keep their granular identity; groups are collapsible view
+# sugar over the repo tree). Activates per repo from this many
+# solutions, and only path segments with at least _GROUP_MIN_MEMBERS
+# solutions get a header.
+_GROUP_MIN_SOLUTIONS_PER_REPO = 10
+_GROUP_MIN_MEMBERS = 3
+
 
 class ReportGenerator:
     """Generates a self-contained HTML report from scan results."""
@@ -74,6 +82,12 @@ class ReportGenerator:
         # then name — enrichment may have updated statuses.
         all_assets.sort(
             key=lambda a: (_STATUS_ORDER[a.risk_status], a.name.lower(), a.id)
+        )
+
+        # Structural table grouping (view only): reorders all_assets so
+        # group members are contiguous and produces header metadata.
+        group_headers, row_groups, collapsed_groups, all_assets = (
+            self._build_table_groups(all_assets)
         )
 
         # Status counts. Dependency-evidence rows (manifest, no code) are
@@ -191,6 +205,9 @@ class ReportGenerator:
             "warning_count": warning,
             "ok_count": ok,
             "assets": all_assets,
+            "group_headers": group_headers,
+            "row_groups": row_groups,
+            "collapsed_groups": collapsed_groups,
             "insights": self.insights,
             "cross_repo_overlaps": cross_repo_overlaps,
             "errors": all_errors,
@@ -215,6 +232,87 @@ class ReportGenerator:
             "org_inventory": self.org_inventory,
             "org_inventory_totals": self._org_inventory_totals(),
         }
+
+    def _build_table_groups(
+        self, all_assets: list[AIAsset]
+    ) -> tuple[dict, dict, set, list[AIAsset]]:
+        """Structural grouping of the solutions table (overview layer).
+
+        Presentation only — identities, IDs and counts are untouched.
+        Solutions of large repos (≥ _GROUP_MIN_SOLUTIONS_PER_REPO) are
+        grouped under their top-level directory when at least
+        _GROUP_MIN_MEMBERS live there; groups without critical findings
+        start collapsed, so a 127-solution teaching repo reads as a
+        chapter list while every solution stays one click away.
+
+        Returns (group_headers, row_groups, collapsed_groups, ordered
+        assets): ``group_headers`` maps the first member's asset id to
+        the header dict rendered above it; ``row_groups`` maps asset id
+        to its group id; ``collapsed_groups`` holds group ids that start
+        collapsed.
+        """
+        per_repo: dict[str, list[AIAsset]] = defaultdict(list)
+        for asset in all_assets:
+            per_repo[asset.repository].append(asset)
+
+        group_headers: dict[str, dict] = {}
+        row_groups: dict[str, str] = {}
+        collapsed_groups: set[str] = set()
+        ordered: list[AIAsset] = []
+
+        for repo, repo_assets in per_repo.items():
+            if len(repo_assets) < _GROUP_MIN_SOLUTIONS_PER_REPO:
+                ordered.extend(repo_assets)
+                continue
+
+            by_top: dict[str, list[AIAsset]] = defaultdict(list)
+            for asset in repo_assets:
+                top = asset.root_path.split("/")[0] if asset.root_path else "."
+                by_top[top].append(asset)
+
+            flat: list[AIAsset] = []
+            groups: list[tuple[str, list[AIAsset]]] = []
+            for top, members in by_top.items():
+                if len(members) >= _GROUP_MIN_MEMBERS and top != ".":
+                    groups.append((top, members))
+                else:
+                    flat.extend(members)
+
+            # Ungrouped rows first (already status-sorted), then groups
+            # ordered by worst status and size.
+            flat.sort(key=lambda a: (_STATUS_ORDER[a.risk_status], a.name.lower(), a.id))
+            ordered.extend(flat)
+            groups.sort(key=lambda g: (
+                min(_STATUS_ORDER[a.risk_status] for a in g[1]),
+                -len(g[1]),
+                g[0].lower(),
+            ))
+            for top, members in groups:
+                gid = f"{repo}::{top}"
+                members.sort(
+                    key=lambda a: (_STATUS_ORDER[a.risk_status], a.name.lower(), a.id)
+                )
+                critical = sum(
+                    1 for a in members if a.risk_status == RiskStatus.CRITICAL
+                )
+                review = sum(
+                    1 for a in members if a.risk_status == RiskStatus.REVIEW
+                )
+                group_headers[members[0].id] = {
+                    "id": gid,
+                    "label": top,
+                    "repo": repo,
+                    "count": len(members),
+                    "critical": critical,
+                    "review": review,
+                }
+                if critical == 0:
+                    collapsed_groups.add(gid)
+                for asset in members:
+                    row_groups[asset.id] = gid
+                ordered.extend(members)
+
+        return group_headers, row_groups, collapsed_groups, ordered
 
     def _org_inventory_totals(self) -> dict | None:
         """Aggregate org enumeration counts across all --org scans."""

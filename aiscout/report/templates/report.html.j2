@@ -134,6 +134,17 @@ footer{text-align:center;color:var(--text-dim);font-size:.65rem;margin-top:2rem;
 .comp-tag{display:inline-block;font-size:.6rem;padding:.05rem .4rem;border-radius:3px;background:var(--accent-bg);color:var(--accent);margin-left:.4rem;vertical-align:middle}
 .sol-path{font-family:'SF Mono','Fira Code',monospace;font-size:.62rem;color:var(--text-dim);margin-top:.1rem}
 
+/* Structural group rows (overview layer over granular solutions) */
+.grp-row{cursor:pointer;background:var(--surface2)}
+.grp-row td{padding:.45rem .8rem;border-top:1px solid var(--border);font-size:.75rem}
+.grp-row:hover td{background:var(--accent-bg)}
+.grp-arrow{display:inline-block;font-size:.65rem;color:var(--accent);margin-right:.45rem;transition:transform .15s;transform:rotate(90deg)}
+.grp-row.collapsed .grp-arrow{transform:rotate(0deg)}
+.grp-path{font-family:'SF Mono','Fira Code',monospace;font-weight:700;color:var(--text)}
+.grp-meta{color:var(--text-muted);margin-left:.6rem}
+.grp-meta .badge{margin-left:.35rem}
+.grp-repo{float:right;font-size:.68rem;color:var(--text-dim)}
+
 /* QA appendix */
 .qa-appendix{margin-top:1.2rem}
 .qa-appendix summary{list-style:none;cursor:pointer;font-size:.7rem;color:var(--text-dim)}
@@ -476,7 +487,24 @@ footer{text-align:center;color:var(--text-dim);font-size:.65rem;margin-top:2rem;
 {% set insight = insights.get(asset.id) if insights else None %}
 {% set risk = asset.risk_status | risk_class %}
 {% set cat = insight.category if insight else 'Other' %}
-<tr class="sol-row" data-risk="{{ risk }}" data-repo="{{ asset.repository }}" data-cat="{{ cat }}" data-id="{{ asset.id }}">
+{% set grp = row_groups.get(asset.id, '') %}
+{% set grp_collapsed = grp and grp in collapsed_groups %}
+{% set header = group_headers.get(asset.id) %}
+{% if header %}
+{# ─── STRUCTURAL GROUP HEADER (view only — identities untouched) ─── #}
+<tr class="grp-row {% if header.id in collapsed_groups %}collapsed{% endif %}" data-gid="{{ header.id }}" data-repo="{{ header.repo }}">
+  <td colspan="6">
+    <span class="grp-arrow">▸</span>
+    <span class="grp-path">{{ header.label }}/</span>
+    <span class="grp-meta">{{ header.count }} solutions
+      {% if header.critical %}<span class="badge critical">{{ header.critical }} critical</span>{% endif %}
+      {% if header.review %}<span class="badge warning">{{ header.review }} review</span>{% endif %}
+    </span>
+    <span class="grp-repo">{{ header.repo }}</span>
+  </td>
+</tr>
+{% endif %}
+<tr class="sol-row" data-risk="{{ risk }}" data-repo="{{ asset.repository }}" data-cat="{{ cat }}" data-id="{{ asset.id }}"{% if grp %} data-grp="{{ grp }}"{% endif %}{% if grp_collapsed %} style="display:none"{% endif %}>
   <td>
     <div class="sol-name">{{ insight.solution_name if insight and insight.solution_name else asset.name }}{% if asset.component_dirs | length > 1 %}<span class="comp-tag" title="{{ asset.component_dirs | join(', ') }}">{{ asset.component_dirs | length }} components</span>{% endif %}</div>
     {% if asset.root_path %}<div class="sol-path">{{ '/' if asset.root_path == '.' else asset.root_path }}</div>{% endif %}
@@ -516,7 +544,7 @@ footer{text-align:center;color:var(--text-dim);font-size:.65rem;margin-top:2rem;
 </tr>
 
 {# ─── DETAIL ROW ─── #}
-<tr class="detail-row" data-id="{{ asset.id }}">
+<tr class="detail-row" data-id="{{ asset.id }}"{% if grp %} data-grp="{{ grp }}"{% endif %}>
 <td colspan="6" class="detail-cell">
 <div class="detail-grid">
   <div>
@@ -732,22 +760,51 @@ document.querySelectorAll('.fb').forEach(b=>{
 const rs=document.getElementById('repoF');
 if(rs) rs.addEventListener('change',applyFilters);
 
+// Structural groups: collapsed set drives member visibility; any active
+// filter overrides collapse so filter results are never hidden.
+const collapsedGroups=new Set(
+  Array.from(document.querySelectorAll('.grp-row.collapsed')).map(g=>g.dataset.gid)
+);
+document.querySelectorAll('.grp-row').forEach(g=>{
+  g.addEventListener('click',()=>{
+    const gid=g.dataset.gid;
+    if(collapsedGroups.has(gid)) collapsedGroups.delete(gid);
+    else collapsedGroups.add(gid);
+    g.classList.toggle('collapsed',collapsedGroups.has(gid));
+    applyFilters();
+  });
+});
+
 function applyFilters(){
   const risk=document.querySelector('.fb.active').dataset.filter;
   const repo=rs?rs.value:'all';
   const catEl=document.querySelector('.cat.active');
   const cat=catEl?catEl.dataset.cat:'all';
+  const filtersActive=risk!=='all'||repo!=='all'||cat!=='all';
   document.querySelectorAll('.sol-row').forEach(r=>{
     const mr=risk==='all'||r.dataset.risk===risk;
     const mre=repo==='all'||r.dataset.repo===repo;
     const mc=cat==='all'||r.dataset.cat===cat;
-    r.style.display=(mr&&mre&&mc)?'':'none';
+    const grpHidden=!filtersActive&&r.dataset.grp&&collapsedGroups.has(r.dataset.grp);
+    r.style.display=(mr&&mre&&mc&&!grpHidden)?'':'none';
     // Also hide detail row
     const dr=r.nextElementSibling;
     if(dr&&dr.classList.contains('detail-row')){
       dr.classList.remove('show');
       r.classList.remove('expanded');
     }
+  });
+  // Group headers: visible when their repo matches and, under an active
+  // filter, only when at least one member row survived the filter.
+  document.querySelectorAll('.grp-row').forEach(g=>{
+    const gid=g.dataset.gid;
+    const mre=repo==='all'||g.dataset.repo===repo;
+    let show=mre;
+    if(show&&filtersActive){
+      show=Array.from(document.querySelectorAll(`.sol-row[data-grp="${gid}"]`))
+        .some(r=>r.style.display!=='none');
+    }
+    g.style.display=show?'':'none';
   });
 }
 
