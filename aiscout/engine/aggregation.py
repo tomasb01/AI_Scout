@@ -65,16 +65,39 @@ def aggregate_assets(
     if not assets:
         return assets
 
-    # ── Rule 1: tutorial collapse ───────────────────────────────────────
+    # ── Rule 1: tutorial chapter collapse ───────────────────────────────
+    # A course repo explodes at the sub-example level (1-Intro/1_FNN/
+    # 1_single, 1-Intro/1_FNN/2_multi, ...), but its top-level chapters
+    # ARE the distinct solutions the reader needs to tell apart — each
+    # lesson covers a different approach/tech stack. So sub-examples fold
+    # into their top-level directory, never into one repo-wide blob:
+    # AI-developer-3 reports ~12 chapter solutions, not 1 and not 144.
     if (
         character.kind == KIND_TUTORIAL
         and character.confidence in ("high", "medium")
         and len(assets) >= TUTORIAL_COLLAPSE_MIN_COMPONENTS
     ):
-        merged = _merge(assets, repo_name, root=".", stable_hash=stable_hash)
-        merged.name = f"{repo_name} teaching collection ({len(assets)} examples)"
-        merged.tags = sorted(set(merged.tags) | {"tutorial_collection"})
-        return [merged]
+        by_chapter: dict[str, list[AIAsset]] = defaultdict(list)
+        for asset in assets:
+            by_chapter[_top_level_dir(_solution_dir(asset))].append(asset)
+
+        result: list[AIAsset] = []
+        for chapter, group in by_chapter.items():
+            if len(group) == 1 and _solution_dir(group[0]) == chapter:
+                result.append(group[0])
+                continue
+            merged = _merge(
+                group, repo_name, root=chapter, stable_hash=stable_hash
+            )
+            if len(group) > 1:
+                merged.name = f"{merged.name} ({len(group)} examples)"
+            merged.tags = sorted(set(merged.tags) | {"tutorial_collection"})
+            result.append(merged)
+
+        result.sort(
+            key=lambda a: (_STATUS_ORDER[a.risk_status], a.name.lower(), a.id)
+        )
+        return result
 
     # ── Rule 2: manifest roots ──────────────────────────────────────────
     manifest_dirs = _manifest_dirs(assets)
@@ -102,6 +125,13 @@ def _solution_dir(asset: AIAsset) -> str:
     first_file = asset.file_path.split(", ")[0] if asset.file_path else ""
     parts = PurePosixPath(first_file).parts
     return str(PurePosixPath(*parts[:-1])) if len(parts) > 1 else "."
+
+
+def _top_level_dir(solution_dir: str) -> str:
+    """Top-level chapter directory for the tutorial collapse."""
+    if solution_dir in (".", ""):
+        return "."
+    return PurePosixPath(solution_dir).parts[0]
 
 
 def _manifest_dirs(assets: list[AIAsset]) -> set[str]:

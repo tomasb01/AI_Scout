@@ -200,22 +200,29 @@ def test_tutorial_repo_collapses_below_threshold_does_not():
     assert len(merged) == 4
 
 
-def test_tutorial_collapse_end_to_end_on_fixture():
-    """QA spec acceptance: the tutorial fixture reports ONE solution,
-    every finding keeps its file:line evidence, and I-01 counts 1."""
+def test_tutorial_chapter_collapse_end_to_end_on_fixture():
+    """The tutorial fixture (10 lessons × 2 examples) reports ten CHAPTER
+    solutions — not 20 pseudo-solutions, and not one repo-wide blob.
+    Each chapter keeps its own identity (tech stack, findings with
+    file:line evidence) so distinct lesson topics stay distinguishable.
+    """
     result = GitScanner(repo_path=str(FIXTURES_TUTORIAL)).scan()
     assert result.metadata["repo_character"]["kind"] == KIND_TUTORIAL
 
-    assert len(result.assets) == 1
-    collection = result.assets[0]
-    assert "teaching collection (10 examples)" in collection.name
-    assert "tutorial_collection" in collection.tags
-    assert len(collection.component_dirs) == 10
-    assert len(collection.raw_findings) == 10  # one import per lesson
+    assert len(result.assets) == 10  # chapters, not 20 sub-examples
+    for chapter in result.assets:
+        assert "(2 examples)" in chapter.name
+        assert "tutorial_collection" in chapter.tags
+        assert len(chapter.component_dirs) == 2
+        assert len(chapter.raw_findings) == 2  # openai + anthropic import
+    names = {a.name for a in result.assets}
+    assert "Lesson Chat (2 examples)" in names
+    assert "Lesson RAG (2 examples)" in names
 
     insights = enrich_assets(result.assets)
-    # enrichment must not overwrite the deliberate collection label
-    assert insights[collection.id].solution_name == collection.name
+    # enrichment must not overwrite the deliberate chapter labels
+    chapter = next(a for a in result.assets if a.name == "Lesson Chat (2 examples)")
+    assert insights[chapter.id].solution_name == chapter.name
 
     stats = collect_stats(
         result.assets, insights,
@@ -223,7 +230,7 @@ def test_tutorial_collapse_end_to_end_on_fixture():
     )
     catalog = build_insights(stats)
     i01 = next(i for i in catalog if i.id == "I-01")
-    assert "1 AI solution " in i01.text  # not "10 AI solutions"
+    assert "10 AI solutions" in i01.text  # not 20, not 1
 
 
 def test_tutorial_collapse_is_deterministic():

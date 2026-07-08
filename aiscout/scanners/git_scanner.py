@@ -1442,7 +1442,7 @@ def _clean_dir_name(name: str) -> str:
     result = []
     for w in words:
         upper = w.upper()
-        if upper in ("AI", "ML", "API", "RAG", "LLM", "NLP", "DB", "SDK", "CLI"):
+        if upper in ("AI", "ML", "API", "RAG", "LLM", "NLP", "DB", "SDK", "CLI", "MCP"):
             result.append(upper)
         else:
             result.append(w.capitalize())

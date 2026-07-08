@@ -388,15 +388,17 @@ Scan tří reálných rep (AI-developer-3, AI-Agents-2 — výuková; Fleurdin_A
 1. **Veto přebily artefakty uvnitř lekcí** — výuková repa nesou lockfily/Dockerfile/testy jako výukový materiál (`1-Intro/3_RNN/uv.lock`, `3_N8N/Dockerfile`). Fix: produkční signály se počítají jen z repo-level umístění (root, root `tests/`, `.github/workflows`; přidán Procfile/fly.toml).
 2. **Tvar ≠ výuka** — Fleurdin_AI (reálná appka) má číslované adresáře jako fáze pipeline (`4-RAG_Pipeline`, `5-Backend`); tvarové signály samy o sobě by ji složily. Fix: tutorial klasifikace vyžaduje aspoň jeden sémantický signál (lesson slova v adresářích / course README).
 
-**Výsledek po fixu: 258 → 12 řešení.**
+3. **Repo-wide kolaps zahazoval informaci** (feedback Tomáše) — kurz probírá ~11 různých témat s různými stacky; „1 teaching collection (144 examples)" neříká, co v repu reálně je. Uživatelský scénář: „když má organizace 30 řešení, která jsou různé formy Copilot instrukcí, chci vědět, o co v konkrétním řešení jde a kam co volá." Fix: **kapitolový kolaps** — pod-příklady se skládají do top-level adresáře (kapitoly/tématu), ne do jednoho repo-wide blobu. Každá kapitola si drží vlastní tech stack, data flow, findingy a risk status.
+
+**Výsledek po fixech: 258 → 27 řešení** (a každé něco říká).
 
 | Repo | Před | Po | Charakter |
 |------|------|-----|-----------|
-| AI-developer-3 | 141 | **1** („teaching collection, 144 examples", 439 findingů, critical zachován) | tutorial_example / high |
-| AI-Agents-2 | 107 | **1** („teaching collection, 118 examples", 308 findingů) | tutorial_example / high |
+| AI-developer-3 | 141 | **10 kapitol** — např. „Hugging Face (12 examples)" critical (klíče), „Langgraph (21 examples)", „Web Operator (3 examples)" s Playwright+MCP | tutorial_example / high |
+| AI-Agents-2 | 107 | **7 kapitol** — „MCP (29 examples)", „DB (15 examples)" s ChromaDB/Elastic, „LLM API (29 examples)" | tutorial_example / high |
 | Fleurdin_AI | 10 | **10** (reálná aplikace — beze změny) | unknown / low |
 
-Exec summary je poprvé důvěryhodné: „Found 12 AI solutions" místo 258; SPOF insight říká smysluplné „One contributor created 10 of 12 solutions (83%)" místo šumu z lekcí. +2 regresní testy zachycující oba poznatky.
+Critical status je lokalizovaný do konkrétní kapitoly (uniklé HF klíče = kapitola Hugging Face + archiv Old), ne rozmazaný přes celé repo. Exec summary: „Found 27 AI solutions across 3 repositories" — důvěryhodné a informativní. +2 regresní testy (repo-level produkční signály, sémantická podmínka), fixture rozšířena o vnořené pod-příklady (10 lekcí × 2 → 10 kapitol).
 
 ---
 
