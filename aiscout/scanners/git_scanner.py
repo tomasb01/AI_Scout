@@ -474,21 +474,18 @@ class GitScanner(BaseScanner):
 
             assets = self._group_findings_into_assets(all_findings, repo_name)
 
-            # ── Sprint 0.3: repo character + aggregation boundary ──
-            # Directory grouping above is the mechanism; here the repo is
-            # classified (production │ tutorial_example │ experiment │
-            # unknown) and components are folded into application-level
-            # solutions (tutorial collapse, manifest roots).
-            from aiscout.engine.aggregation import aggregate_assets
+            # ── Sprint 0.3: repo character (observable, into metadata) ──
+            # Aggregation does NOT happen here: solution identity is
+            # derived from code purpose, so components are merged only
+            # AFTER code analysis + data-flow mapping — see
+            # engine/aggregation.aggregate_scan_result, called by the
+            # pipeline once flows exist.
             from aiscout.engine.repo_character import detect_repo_character
 
             character = detect_repo_character(
                 scanned_rel_paths,
                 solution_dirs=[_get_solution_dir(f.file_path) for f in all_findings],
                 readme_text=self._read_root_readme(root),
-            )
-            assets = aggregate_assets(
-                assets, repo_name, character, stable_hash=_stable_hash
             )
 
             # Extract git authors for each asset

@@ -138,7 +138,7 @@
   "insights": [
     {
       "asset_name": ".github",
-      "category": "Workflows & Pipelines",
+      "category": "Model & Inference",
       "data_involved": [],
       "provider_profile_name": "anthropic",
       "recommendation_count": 2,
@@ -156,7 +156,7 @@
     },
     {
       "asset_name": "Azure OpenAI Integration",
-      "category": "Other AI Solutions",
+      "category": "RAG & Search",
       "data_involved": [],
       "provider_profile_name": "azure_openai",
       "recommendation_count": 2,

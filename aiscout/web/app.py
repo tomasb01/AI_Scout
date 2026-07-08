@@ -196,6 +196,12 @@ async def _run_scan(scan_id: str, config: dict):
             if result.assets:
                 await asyncio.to_thread(build_data_flows, result.assets)
 
+        # Aggregation boundary — after analysis (identity = code purpose)
+        log("Aggregating solution variants...")
+        from aiscout.engine.aggregation import aggregate_scan_result
+        for result in scan_results:
+            aggregate_scan_result(result)
+
         # Cleanup cloned repos
         for scanner in scanners:
             scanner.cleanup()

@@ -404,6 +404,24 @@ Critical status je lokalizovaný do konkrétní kapitoly (uniklé HF klíče = k
 
 ---
 
+## Refactor: účel jako identita řešení (8. července 2026, v0.11.0)
+
+Feedback Tomáše po validaci: identita řešení musí být **účel → tech stack → struktura** — 10 LangGraph agentů s 10 účely je 10 řešení; totéž řešení v jiném frameworku je samostatné řešení viditelné v overlapu. Kolaps kapitol tuhle informaci zahazoval a kategorie se vařily ze slepené hromady.
+
+### Změny
+
+- **Pipeline přeskládána**: scan (directory grouping) → code context → data flow → **agregace** (`aggregate_scan_result`, volá CLI/web/testy) → enrichment. Agregace už neběží ve scanneru — identita se odvozuje z pochopených komponent, ne z adresářového mišmaše.
+- **Merge kritérium = strukturální hranice + funkční otisk**: komponenty se slučují jen když sdílejí hranici (kapitola tutorial repa / podstrom podadresářového manifestu) **a** identický DataFlowMap fingerprint (sinky + kroky + kategorie dat) — „varianty téhož" prokázané tokem. Bez toku se nemerguje nic; stejný tok ve dvou větvích repa = overlap insight, ne merge. ID variant group = hash(repo, hranice, fingerprint).
+- **Jména z účelu**: „A web researcher (3 variants)", „Browser Automation Operator" místo „Hugging Face (12 examples)"; kolize display jmen řeší přípona s cestou („Calculate Length — 0-AI_Dev_Scripts/1_joe").
+- **Kategorie z tagů/task_types** místo text-first heuristiky — nalezen substring bug (`"train" in text` chytá „constraint", „dataset" je v každém RAG kódu → 62 % všeho bylo Fine-tuning). Teď: AI Agents 94, Chatbot 46, MCP 29, Model & Inference 24, RAG 23, Fine-tuning 13.
+- **Dependency evidence**: manifest bez kódu není řešení („uses Hugging Face" je mechanismus použití) — vlastní kategorie „Dependency Evidence", jméno „Dependency manifest — repo root", **vyloučeno ze všech počtů** (I-01, dlaždice, JSON summary — konzistentně; `summary.dependency_evidence` počítadlo).
+
+### Validace (3 reálná repa)
+
+AI-developer-3: 127 řešení (z 141 dir-assetů; merge jen prokázané varianty), AI-Agents-2: 102, Fleurdin: 12 + 4× dependency evidence. **Každé řešení má účelové jméno, smysluplnou kategorii a cestu.** Čísla jsou vyšší než u kapitolového kolapsu — vědomě: výukové repo reálně obsahuje ~100 různých toků a granularita je hodnota produktu; badge „tutorial/example repo" dává kontext. 267 testů passing.
+
+---
+
 ## Otevřené body
 
 1. **Report redesign** — implementovat vybranou variantu (nebo mix) jako nový `report.html.j2`

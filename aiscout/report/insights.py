@@ -331,6 +331,10 @@ def collect_stats(
     overlap_group_sizes: list[int] | None = None,
 ) -> InsightStats:
     """Compute all insight metrics from one place, one denominator."""
+    # Dependency-evidence entries (a manifest with no code behind it)
+    # are facts about the repo, not AI solutions — they stay visible in
+    # the report but never enter solution counts or percentages.
+    assets = [a for a in assets if "dependency_evidence" not in a.tags]
     stats = InsightStats(
         total=len(assets),
         repos=max(1, repos),

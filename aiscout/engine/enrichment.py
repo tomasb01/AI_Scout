@@ -94,6 +94,30 @@ def enrich_asset(asset: AIAsset) -> AssetInsight:
     category = _classify_category(asset)
     solution_name = _derive_solution_display_name(asset, category)
 
+    # Sprint 0.3 — identity is purpose, tech is an attribute, structure
+    # is context:
+    # * A variant group (same boundary + same flow fingerprint) carries
+    #   its variant count in the name.
+    # * A manifest with no code behind it is dependency EVIDENCE about
+    #   the repo, not an AI solution ("uses Hugging Face" is a usage
+    #   mechanism, not a solution) — labelled as such and excluded from
+    #   solution stats by the insight layer.
+    if len(asset.component_dirs) > 1:
+        solution_name = f"{solution_name} ({len(asset.component_dirs)} variants)"
+    deps_only = (
+        bool(asset.raw_findings)
+        and all(
+            f.type == FindingType.DEPENDENCY_DETECTED
+            for f in asset.raw_findings
+        )
+        and not asset.code_contexts
+    )
+    if deps_only:
+        asset.tags = sorted(set(asset.tags) | {"dependency_evidence"})
+        category = "Dependency Evidence"
+        location = asset.root_path if asset.root_path not in ("", ".") else "repo root"
+        solution_name = f"Dependency manifest — {location}"
+
     # Categorical status derived from all reasons (including the optional
     # LLM evidence above) — single source of truth for the report.
     asset.risk_status = _derive_risk_status(risk_reasons)
@@ -112,7 +136,23 @@ def enrich_asset(asset: AIAsset) -> AssetInsight:
 
 def enrich_assets(assets: list[AIAsset]) -> dict[str, AssetInsight]:
     """Enrich all assets. Returns a dict mapping asset.id -> AssetInsight."""
-    return {asset.id: enrich_asset(asset) for asset in assets}
+    insights = {asset.id: enrich_asset(asset) for asset in assets}
+
+    # Display-name collisions: two different solutions must never render
+    # under one identical label — the repo location disambiguates
+    # ("Calculate Length — 0-AI_Dev_Scripts/1_joe").
+    from collections import defaultdict
+
+    by_name: dict[tuple[str, str], list[AIAsset]] = defaultdict(list)
+    for asset in assets:
+        by_name[(asset.repository, insights[asset.id].solution_name)].append(asset)
+    for (_, name), group in by_name.items():
+        if len(group) > 1:
+            for asset in group:
+                if asset.root_path:
+                    insights[asset.id].solution_name = f"{name} — {asset.root_path}"
+
+    return insights
 
 
 # ── Sprint 2: task_type + tag derivation ─────────────────────────────────
@@ -1683,17 +1723,45 @@ def _extract_data_involved(asset: AIAsset) -> list[str]:
 
 
 def _classify_category(asset: AIAsset) -> str:
-    """Classify the solution into a category for grouping."""
-    all_text = asset.name.lower() + " " + asset.file_path.lower()
+    """Classify the solution into a category for grouping.
 
-    # Add code context signals
+    Primary signal: task_types + tags, which come from the curated
+    keyword sets in ``_detect_task_types`` / ``_derive_tags``. The old
+    text-first heuristic put loose substrings first — ``"train" in
+    text`` matches "constraint", "dataset" appears in most RAG code —
+    which mislabelled the majority of real scans as Fine-tuning &
+    Training. Free-text matching survives only as the fallback for
+    assets with no tag evidence at all.
+    """
+    task_types = set(asset.task_types)
+    tags = set(asset.tags)
+
+    if (
+        TaskType.FINE_TUNING in task_types
+        or TaskType.TRAINING in task_types
+        or {"fine_tuning", "training"} & tags
+    ):
+        return "Fine-tuning & Training"
+    if "agent" in tags:
+        return "AI Agents"
+    if "rag" in tags:
+        return "RAG & Search"
+    if "mcp" in tags:
+        return "MCP & Integration"
+    if "chatbot" in tags:
+        return "Chatbot & Conversation"
+    if {"transcription", "image_generation", "local_model"} & tags:
+        return "Model & Inference"
+
+    # ── Fallback: free-text heuristics for tag-less assets ──
+    all_text = asset.name.lower() + " " + asset.file_path.lower()
     for ctx in asset.code_contexts:
         for func in ctx.functions:
             all_text += " " + func.get("name", "").lower()
             all_text += " " + func.get("body_preview", "").lower()
         all_text += " " + " ".join(p.lower() for p in ctx.prompts)
 
-    if any(kw in all_text for kw in ("finetun", "fine_tun", "train", "dataset", "tokenizer")):
+    if any(kw in all_text for kw in ("finetun", "fine_tun", "tokenizer")):
         return "Fine-tuning & Training"
     if any(kw in all_text for kw in ("agent", "react", "tool_call", "create_agent", "swarm", "crew")):
         return "AI Agents"
@@ -1720,21 +1788,16 @@ def _derive_solution_display_name(asset: AIAsset, category: str) -> str:
     """Derive a name that describes WHAT the solution does, not what framework it uses.
 
     Priority:
-    0. Aggregated teaching collection keeps its scanner label (Sprint 0.3)
     1. README title (if meaningful)
     2. Specific prompt role ("Joe Rogan voice clone", "Fleurdin florist assistant")
     3. Purpose from key functions ("Stock Price & Dividend Checker")
     4. Category + directory context ("Image Analysis — Multimodal")
     5. Directory-based name (last resort)
+
+    Variant-count suffix and dependency-evidence relabelling happen in
+    ``enrich_asset`` after this returns (Sprint 0.3).
     """
     import re
-
-    # ── 0. Tutorial collection ──
-    # The aggregation layer collapsed a teaching repo into one solution
-    # with a deliberate "<repo> teaching collection (N examples)" label;
-    # a README title from lesson 1 must not overwrite it.
-    if "tutorial_collection" in asset.tags:
-        return asset.name
 
     # ── 1. README title ──
     _readme_noise_titles = {

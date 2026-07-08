@@ -72,7 +72,9 @@ def test_generate_creates_file():
     content = Path(path).read_text()
     assert "AI Scout" in content
     assert "openai usage" in content
-    assert "langchain usage" in content
+    # the langchain asset carries only a dependency finding and no code,
+    # so it renders as dependency evidence, not as a solution (Sprint 0.3)
+    assert "Dependency manifest" in content
     Path(path).unlink()
 
 
@@ -80,10 +82,12 @@ def test_context_risk_counts():
     result = _make_scan_result()
     gen = ReportGenerator([result])
     ctx = gen._build_context()
-    # Enrichment recalculates risk scores from risk reasons
-    assert ctx["total_assets"] == 2
-    # All assets should be counted in one of the three categories
-    assert ctx["critical_count"] + ctx["warning_count"] + ctx["ok_count"] == 2
+    # The dependency-manifest-only asset is evidence, not a solution —
+    # excluded from every headline count (still rendered in the table).
+    assert ctx["total_assets"] == 1
+    assert len(ctx["assets"]) == 2
+    # All counted assets fall into one of the three categories
+    assert ctx["critical_count"] + ctx["warning_count"] + ctx["ok_count"] == 1
 
 
 def test_cross_repo_overlap_detection():

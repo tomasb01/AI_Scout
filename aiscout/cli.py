@@ -174,6 +174,14 @@ def scan(
             if result.assets:
                 build_data_flows(result.assets)
 
+    # Aggregation boundary (Sprint 0.3) — AFTER analysis, because solution
+    # identity comes from code purpose: only same-boundary components with
+    # an identical data-flow fingerprint merge into a variant group.
+    # Without flow maps (manifests-only) nothing merges, by design.
+    from aiscout.engine.aggregation import aggregate_scan_result
+    for result in scan_results:
+        aggregate_scan_result(result)
+
     # Cleanup cloned repos
     for scanner in scanners:
         scanner.cleanup()

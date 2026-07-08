@@ -76,10 +76,16 @@ class ReportGenerator:
             key=lambda a: (_STATUS_ORDER[a.risk_status], a.name.lower(), a.id)
         )
 
-        # Status counts
-        critical = sum(1 for a in all_assets if a.risk_status == RiskStatus.CRITICAL)
-        warning = sum(1 for a in all_assets if a.risk_status == RiskStatus.REVIEW)
-        ok = sum(1 for a in all_assets if a.risk_status == RiskStatus.NO_FINDINGS)
+        # Status counts. Dependency-evidence rows (manifest, no code) are
+        # facts about the repo, not solutions — shown in the table but
+        # kept out of every headline number so the tiles always agree
+        # with the I-01 insight sentence.
+        stat_assets = [
+            a for a in all_assets if "dependency_evidence" not in a.tags
+        ]
+        critical = sum(1 for a in stat_assets if a.risk_status == RiskStatus.CRITICAL)
+        warning = sum(1 for a in stat_assets if a.risk_status == RiskStatus.REVIEW)
+        ok = sum(1 for a in stat_assets if a.risk_status == RiskStatus.NO_FINDINGS)
 
         # Cross-repo overlap detection
         provider_repos: dict[str, set[str]] = defaultdict(set)
@@ -165,7 +171,7 @@ class ReportGenerator:
 
         # New stats
         overlap_count = sum(o["count"] for o in overlaps)
-        unique_count = len(all_assets) - overlap_count
+        unique_count = len(stat_assets) - overlap_count
         at_risk = critical + warning
         people_count = len([a for a in author_coverage if a["count"] > 0])
 
@@ -174,7 +180,7 @@ class ReportGenerator:
             "kb_version": KB_VERSION,
             "scan_date": scan_date,
             "repos": repos,
-            "total_assets": len(all_assets),
+            "total_assets": len(stat_assets),
             "unique_count": max(0, unique_count),
             "overlap_count": overlap_count,
             "overlap_areas": len(overlaps),

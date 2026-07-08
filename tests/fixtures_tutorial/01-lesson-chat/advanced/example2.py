@@ -1,5 +1,6 @@
-import anthropic
+import openai
 
-client = anthropic.Anthropic()
-# advanced chat demo
-msg = client.messages.create(model='claude-sonnet-4-5', max_tokens=100, messages=[{'role': 'user', 'content': 'hi'}])
+client = openai.OpenAI()
+# advanced chat demo — same flow, second variant
+resp = client.chat.completions.create(model='gpt-4o-mini', messages=[{'role': 'user', 'content': 'hello again'}])
+print(resp.choices[0].message.content)

@@ -61,10 +61,15 @@ class JSONExporter:
                 "completed_at": result.completed_at.isoformat() if result.completed_at else None,
             })
 
-        # Status counts
-        critical = sum(1 for a in all_assets if a.risk_status == RiskStatus.CRITICAL)
-        warning = sum(1 for a in all_assets if a.risk_status == RiskStatus.REVIEW)
-        ok = sum(1 for a in all_assets if a.risk_status == RiskStatus.NO_FINDINGS)
+        # Status counts — dependency-evidence entries (manifest, no code)
+        # are exported in "solutions" but excluded from every summary
+        # count, matching the HTML tiles and the I-01 insight sentence.
+        stat_assets = [
+            a for a in all_assets if "dependency_evidence" not in a.tags
+        ]
+        critical = sum(1 for a in stat_assets if a.risk_status == RiskStatus.CRITICAL)
+        warning = sum(1 for a in stat_assets if a.risk_status == RiskStatus.REVIEW)
+        ok = sum(1 for a in stat_assets if a.risk_status == RiskStatus.NO_FINDINGS)
 
         # Build solutions
         solutions = [self._asset_to_dict(asset) for asset in all_assets]
@@ -174,7 +179,8 @@ class JSONExporter:
             ) else "static",
             "generated_at": now_utc().isoformat(),
             "summary": {
-                "total_solutions": len(all_assets),
+                "total_solutions": len(stat_assets),
+                "dependency_evidence": len(all_assets) - len(stat_assets),
                 "critical": critical,
                 "review": warning,
                 "no_findings": ok,

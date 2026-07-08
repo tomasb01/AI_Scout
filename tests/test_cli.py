@@ -32,7 +32,7 @@ def test_version():
     result = runner.invoke(cli, ["--version"])
     assert result.exit_code == 0
     assert "aiscout" in result.output
-    assert "0.10.0" in result.output
+    assert "0.11.0" in result.output
 
 
 def test_scan_no_repos_error():

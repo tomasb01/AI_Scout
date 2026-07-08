@@ -31,6 +31,7 @@ from pathlib import Path
 
 import pytest
 
+from aiscout.engine.aggregation import aggregate_scan_result
 from aiscout.engine.code_analyzer import analyze_assets
 from aiscout.engine.data_flow import build_data_flows
 from aiscout.engine.enrichment import enrich_assets
@@ -63,6 +64,7 @@ def _run_pipeline_both(root: Path = FIXTURES) -> tuple[dict, dict]:
     result = scanner.scan()
     analyze_assets(result.assets, str(root))
     build_data_flows(result.assets)
+    aggregate_scan_result(result)
     insights_by_id = enrich_assets(result.assets)
     # Re-key insights from volatile asset UUID → stable asset name so the
     # snapshot diff isn't dominated by UUID churn.
@@ -318,6 +320,7 @@ def test_regression_snapshot_qa():
     result = scanner.scan()
     analyze_assets(result.assets, str(FIXTURES))
     build_data_flows(result.assets)
+    aggregate_scan_result(result)
     insights = enrich_assets(result.assets)
     qa = prepare_qa(
         result.assets, insights,
@@ -411,6 +414,7 @@ def test_json_export_bit_identical_with_timestamp_override(tmp_path, monkeypatch
         result = GitScanner(repo_path=str(FIXTURES)).scan()
         analyze_assets(result.assets, str(FIXTURES))
         build_data_flows(result.assets)
+        aggregate_scan_result(result)
         insights = enrich_assets(result.assets)
         JSONExporter([result], output_path=str(path), insights=insights).generate()
         return path.read_bytes()
