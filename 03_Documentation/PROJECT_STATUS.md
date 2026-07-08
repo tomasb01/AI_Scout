@@ -1,8 +1,10 @@
 # AI Scout — Project Status & Documentation
 
-**Last updated: May 21, 2026 | Version: 0.7.0 (+ org-scan / guardrail on branch) | Sprints 1–5 completed**
+**Last updated: July 8, 2026 | Version: 0.9.0 | Sprints 1–5 + 0.1 (stable IDs, risk status) + 0.2 (report QA layer) completed**
 
-> Detailní log sprintů: viz **[SPRINT_LOG.md](SPRINT_LOG.md)** (security hardening, Data Flow Mapper, LLM e2e validace, risk rework, CI/CD scanner, dep advisories, report redesign prototypy). Currently **139 tests** passing (116 at v0.7.0 + org enumeration, manifest-only, GitHub Coverage, developer guardrail).
+> Detailní log sprintů: viz **[SPRINT_LOG.md](SPRINT_LOG.md)** (security hardening, Data Flow Mapper, LLM e2e validace, risk rework, CI/CD scanner, dep advisories, report redesign prototypy, QA vrstva reportu). Currently **248 tests** passing.
+>
+> **Sprint 0.2 (v0.9.0):** typed insight catalog I-01–I-10 (ICU templates, single-denominator pct discipline), report linter L-01–L-10 with degradation to fact strips, controlled-vocabulary fact strip as the no-LLM detail default, QA appendix in the report, `qa` + `insights` in JSON export (schema 1.2.0), `aiscout scan --strict` CI gate. New modules: `report/qa_vocab.py`, `report/insights.py`, `report/linter.py`, `report/qa.py`.
 
 ---
 

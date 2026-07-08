@@ -11,6 +11,7 @@ from aiscout import __version__
 from aiscout.engine.enrichment import AssetInsight, _deduplicate_tech_stack, enrich_assets
 from aiscout.knowledge.providers import KB_VERSION, get_provider
 from aiscout.models import AIAsset, FindingType, RiskStatus, ScanResult
+from aiscout.report.qa import QAResult, prepare_qa
 
 _STATUS_ORDER = {
     RiskStatus.CRITICAL: 0, RiskStatus.REVIEW: 1, RiskStatus.NO_FINDINGS: 2,
@@ -31,6 +32,8 @@ class ReportGenerator:
         self.output_path = output_path
         self.insights = insights
         self.org_inventory = org_inventory or []
+        # Filled by _build_context — the CLI reads counts for --strict.
+        self.qa_result: QAResult | None = None
         self._env = Environment(
             loader=PackageLoader("aiscout", "report/templates"),
             autoescape=True,
@@ -149,9 +152,14 @@ class ReportGenerator:
         data_sensitivity = self._build_data_sensitivity(all_assets)
         author_coverage = self._build_author_coverage(all_assets)
         categories = self._group_by_category(all_assets)
-        exec_summary = self._build_executive_summary(
-            all_assets, overlaps, tech_radar, data_sensitivity,
-            author_coverage, data_egress_sorted, critical, warning,
+
+        # QA layer (Sprint 0.2): typed insights → linter → degradation.
+        # Replaces the hand-concatenated executive summary.
+        self.qa_result = prepare_qa(
+            all_assets, self.insights,
+            repos=len(repos),
+            files_scanned=total_files_scanned,
+            overlap_group_sizes=[o["count"] for o in overlaps],
         )
 
         # New stats
@@ -180,6 +188,12 @@ class ReportGenerator:
             "cross_repo_overlaps": cross_repo_overlaps,
             "errors": all_errors,
             "has_llm_data": has_llm_data,
+            "exec_insights": self.qa_result.exec_insights,
+            "fact_strips": self.qa_result.fact_strips,
+            "summary_display": self.qa_result.summary_display,
+            "recommendations_display": self.qa_result.recommendations_display,
+            "qa_counts": self.qa_result.counts(),
+            "qa_issues": self.qa_result.qa_report.issues,
             "FindingType": FindingType,
             "data_egress": data_egress_sorted,
             "all_authors": all_authors,
@@ -189,7 +203,6 @@ class ReportGenerator:
             "tech_radar": tech_radar,
             "data_sensitivity": data_sensitivity,
             "author_coverage": author_coverage,
-            "exec_summary": exec_summary,
             "graph_data": self._build_graph_data(all_assets),
             "repo_urls": repo_urls,
             "org_inventory": self.org_inventory,
@@ -389,81 +402,6 @@ class ReportGenerator:
                 "is_spof": pct >= 30,  # 30%+ = single point of failure risk
             })
         return result
-
-    def _build_executive_summary(
-        self, assets, overlaps, tech_radar, data_sensitivity,
-        author_coverage, data_egress, critical_count, warning_count,
-    ) -> list[str]:
-        """Generate executive summary bullet points."""
-        points = []
-        total = len(assets)
-
-        # Total count
-        points.append(f"Found **{total} AI solutions** across scanned repositories.")
-
-        # Overlap
-        if overlaps:
-            overlap_solutions = sum(o["count"] for o in overlaps)
-            points.append(
-                f"**{overlap_solutions} solutions** functionally overlap in "
-                f"**{len(overlaps)} areas** — consolidation opportunity."
-            )
-
-        # Risk
-        if critical_count:
-            points.append(
-                f"**{critical_count} solutions** with critical findings "
-                f"(hardcoded API keys, sensitive data egress) — requires immediate attention."
-            )
-
-        # Data egress
-        us_providers = [
-            eg["display_name"] for eg in data_egress.values()
-            if any("US" in r for r in eg.get("regions", []))
-            and eg.get("category") == "llm_api"
-        ]
-        if us_providers:
-            us_assets = sum(
-                eg["asset_count"] for eg in data_egress.values()
-                if any("US" in r for r in eg.get("regions", []))
-                and eg.get("category") == "llm_api"
-            )
-            points.append(
-                f"**{us_assets} solutions** send data to US ({', '.join(us_providers)}) "
-                f"— verify that all legal requirements are in place (DPA, data residency)."
-            )
-
-        # Author SPOF
-        spof_authors = [a for a in author_coverage if a["is_spof"]]
-        if spof_authors:
-            names = ", ".join(a["name"] for a in spof_authors)
-            pct = spof_authors[0]["percentage"]
-            points.append(
-                f"**{len(spof_authors)} developer{'s' if len(spof_authors) > 1 else ''}** "
-                f"created over {pct}% of all solutions ({names}) "
-                f"— single-point-of-failure risk."
-            )
-
-        # Tech concentration
-        if tech_radar and tech_radar[0]["count"] > total * 0.3:
-            top = tech_radar[0]
-            points.append(
-                f"Highest dependency on **{top['name']}** — "
-                f"used by {top['count']} of {total} solutions ({round(100*top['count']/total)}%)."
-            )
-
-        # Data sensitivity
-        sensitive_types = [d for d in data_sensitivity if d["type"] in (
-            "Personal data / PII", "Financial data", "Credentials / Secrets",
-        )]
-        if sensitive_types:
-            for st in sensitive_types:
-                points.append(
-                    f"**{st['count']} solutions** process **{st['type']}** data "
-                    f"— requires elevated compliance attention."
-                )
-
-        return points
 
     def _build_graph_data(self, assets: list[AIAsset]) -> dict:
         """Build node/edge data for the 3 graph views."""

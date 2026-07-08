@@ -10,6 +10,7 @@ from pathlib import Path
 from aiscout.engine.enrichment import AssetInsight
 from aiscout.knowledge.providers import KB_VERSION
 from aiscout.models import AIAsset, RiskStatus, ScanResult, now_utc
+from aiscout.report.qa import QAResult, prepare_qa
 
 
 class JSONExporter:
@@ -24,6 +25,8 @@ class JSONExporter:
         self.scan_results = scan_results
         self.output_path = output_path
         self.insights = insights or {}
+        # Filled by _build_data — the CLI reads counts for --strict.
+        self.qa_result: QAResult | None = None
 
     def generate(self) -> Path:
         """Render scan results as JSON and write to disk."""
@@ -138,11 +141,22 @@ class JSONExporter:
             })
         overlaps.sort(key=lambda x: -x["count"])
 
+        # QA layer (Sprint 0.2) — same pipeline as the HTML report, so the
+        # JSON carries identical insight sentences and suppression counts.
+        self.qa_result = prepare_qa(
+            all_assets, self.insights,
+            repos=len(repos),
+            files_scanned=total_files,
+            overlap_group_sizes=[o["count"] for o in overlaps],
+        )
+
         return {
             # Aditive evolution only from here on: new fields/enum values may
             # be added; existing meaning never changes below a major bump
             # (datamodel spec §1.1-1.2).
-            "schema_version": "1.1.0",
+            # 1.2.0: adds "insights" (typed catalog I-01–I-10) and "qa"
+            # (linter suppression/warning counts).
+            "schema_version": "1.2.0",
             "scout_version": _scout_version(),
             "kb_version": KB_VERSION,
             "mode": "llm_enriched" if any(
@@ -166,6 +180,8 @@ class JSONExporter:
             "categories": dict(sorted(categories.items(), key=lambda x: -x[1])),
             "tech_stack": dict(sorted(tech_counts.items(), key=lambda x: -x[1])),
             "authors": dict(sorted(author_counts.items(), key=lambda x: -x[1])),
+            "insights": [i.to_dict() for i in self.qa_result.insights],
+            "qa": self.qa_result.counts(),
             "overlaps": overlaps,
             "solutions": solutions,
             "errors": all_errors,

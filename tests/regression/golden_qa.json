@@ -1,0 +1,106 @@
+{
+  "fact_strips": {
+    "Anthropic (Claude) Integration": {
+      "pattern": "chat completion",
+      "sinks": [
+        "Anthropic (Claude) (US)",
+        "database write",
+        "HTTP response"
+      ],
+      "sources": [
+        "database (SQL)",
+        "user input"
+      ],
+      "tech": [
+        "Anthropic (Claude)",
+        "LangChain",
+        "OpenAI",
+        "SQLite"
+      ]
+    },
+    "Sprint2": {
+      "pattern": "fine-tuning pipeline",
+      "sinks": [
+        "OpenAI (US)"
+      ],
+      "sources": [
+        "environment variable"
+      ],
+      "tech": [
+        "Azure OpenAI",
+        "Hugging Face",
+        "MCP",
+        "Ollama",
+        "Qdrant"
+      ]
+    },
+    "Sprint3": {
+      "pattern": "RAG pipeline",
+      "sinks": [
+        "Azure OpenAI (customer-selected Azure region (EU, US, UK, …))"
+      ],
+      "sources": [
+        "unclassified"
+      ],
+      "tech": [
+        "Azure OpenAI",
+        "ChromaDB",
+        "LangChain",
+        "Ollama",
+        "OpenAI"
+      ]
+    },
+    "Sprint3 — Workflows": {
+      "pattern": "local inference",
+      "sinks": [
+        "Anthropic (Claude) (US)"
+      ],
+      "sources": [
+        "unclassified"
+      ],
+      "tech": [
+        "Anthropic (Claude)",
+        "Hugging Face"
+      ]
+    }
+  },
+  "insights": [
+    {
+      "id": "I-01",
+      "severity": "info",
+      "suppressed": false,
+      "template_id": "T-INVENTORY-v2",
+      "text": "Found 4 AI solutions across 1 repository (11 files scanned).",
+      "type": "INVENTORY_TOTAL"
+    },
+    {
+      "id": "I-02",
+      "severity": "critical",
+      "suppressed": false,
+      "template_id": "T-CRITICAL-v1",
+      "text": "1 solution requires immediate attention: hardcoded API keys.",
+      "type": "CRITICAL_FINDINGS"
+    },
+    {
+      "id": "I-03",
+      "severity": "warning",
+      "suppressed": false,
+      "template_id": "T-EGRESS-v1",
+      "text": "4 solutions send data to US-based providers (Anthropic (Claude), Azure OpenAI) — verify DPA and data-residency requirements.",
+      "type": "DATA_EGRESS_REGION"
+    },
+    {
+      "id": "I-05",
+      "severity": "info",
+      "suppressed": false,
+      "template_id": "T-DEP-CONC-v1",
+      "text": "Highest dependency: Anthropic (Claude), used by 2 of 4 solutions (50%).",
+      "type": "DEPENDENCY_CONCENTRATION"
+    }
+  ],
+  "qa": {
+    "suppressed": 0,
+    "warnings": 0
+  },
+  "summaries_displayed": []
+}

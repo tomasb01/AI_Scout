@@ -43,6 +43,7 @@ GOLDEN_DIR = Path(__file__).parent / "regression"
 GOLDEN = GOLDEN_DIR / "golden.json"
 GOLDEN_SPRINT2 = GOLDEN_DIR / "golden_sprint2.json"
 GOLDEN_SPRINT3 = GOLDEN_DIR / "golden_sprint3.json"
+GOLDEN_QA = GOLDEN_DIR / "golden_qa.json"
 
 
 def _run_pipeline(root: Path = FIXTURES) -> dict:
@@ -305,6 +306,50 @@ def test_regression_snapshot_sprint3():
     stable, volatile = _run_pipeline_both(SPRINT3_FIXTURES)
     _diff_against_golden(stable, GOLDEN_SPRINT3, "fixtures/sprint3")
     _assert_volatile_floor(volatile, "fixtures/sprint3")
+
+
+def test_regression_snapshot_qa():
+    """Sprint 0.2 — QA layer over the fixture tree: rendered insight
+    sentences (I-01–I-10), linter counts and fact strips. Any wording
+    drift in the executive summary is an explicit, reviewed change."""
+    from aiscout.report.qa import prepare_qa
+
+    scanner = GitScanner(repo_path=str(FIXTURES))
+    result = scanner.scan()
+    analyze_assets(result.assets, str(FIXTURES))
+    build_data_flows(result.assets)
+    insights = enrich_assets(result.assets)
+    qa = prepare_qa(
+        result.assets, insights,
+        repos=1,
+        files_scanned=result.metadata.get("files_scanned", 0),
+    )
+
+    by_name = {a.id: a.name for a in result.assets}
+    snapshot = {
+        "insights": [
+            {
+                "id": i.id,
+                "type": i.type,
+                "severity": i.severity,
+                "template_id": i.template_id,
+                "text": i.text,
+                "suppressed": i.suppressed,
+            }
+            for i in qa.insights
+        ],
+        "qa": qa.counts(),
+        "fact_strips": {
+            by_name[aid]: strip.to_dict()
+            for aid, strip in sorted(
+                qa.fact_strips.items(), key=lambda kv: by_name[kv[0]]
+            )
+        },
+        "summaries_displayed": sorted(
+            by_name[aid] for aid, s in qa.summary_display.items() if s
+        ),
+    }
+    _diff_against_golden(snapshot, GOLDEN_QA, "fixtures-qa")
 
 
 def test_snapshot_is_deterministic():

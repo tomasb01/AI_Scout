@@ -3,7 +3,7 @@
 Enterprise AI Discovery & Security Assessment Tool.
 Self-hosted, open-source (BSL), CLI + Web UI.
 
-**Current status: v0.8.0** — functional end-to-end product, 5 sprints + Sprint 0.1 (stable IDs, risk-status model) completed, ~141 tests passing.
+**Current status: v0.9.0** — functional end-to-end product, 5 sprints + Sprint 0.1 (stable IDs, risk-status model) + Sprint 0.2 (report QA layer: typed insights, linter, fact strips) completed, 248 tests passing.
 **Orientation: start with `00_PROJECT_MAP.md`** (document hierarchy, sprint roadmap, where we are, next steps).
 Full status: `03_Documentation/PROJECT_STATUS.md` · Sprint detail: `03_Documentation/SPRINT_LOG.md`
 
@@ -71,7 +71,7 @@ uv run pytest tests/ -q
 ```
 
 Key CLI parameters:
-- `aiscout scan` — `--repo`/`--local`/`--org` (source; multi-repo + YAML config supported), `--include-archived`/`--include-forks`/`--max-repos` (org filters), `--manifests-only`, `--llm-url`, `--llm-model`, `--llm-mode` (ollama|openai), `--llm-key`, `--no-llm`, `--output` (.html/.json auto-detect), `--branch`, `--token`.
+- `aiscout scan` — `--repo`/`--local`/`--org` (source; multi-repo + YAML config supported), `--include-archived`/`--include-forks`/`--max-repos` (org filters), `--manifests-only`, `--llm-url`, `--llm-model`, `--llm-mode` (ollama|openai), `--llm-key`, `--no-llm`, `--output` (.html/.json auto-detect), `--branch`, `--token`, `--strict` (CI: exit non-zero when the report QA linter suppressed any sentence).
 - `aiscout check` — `--path` (default `.`), `--warn-only`. Rule-based, no network; exits 1 on hardcoded keys or sensitive data sent to an external LLM (local runtimes like Ollama exempt).
 - `aiscout web` — `--host`, `--port`.
 
@@ -119,7 +119,11 @@ AI_Scout/
 │   │   └── assets.py                   # Pydantic models
 │   ├── report/
 │   │   ├── html.py                     # HTML report generator (+ GitHub Coverage section)
-│   │   ├── json_export.py              # JSON export
+│   │   ├── json_export.py              # JSON export (schema 1.2.0: insights + qa)
+│   │   ├── insights.py                 # Typed insight catalog I-01–I-10 (ICU templates)
+│   │   ├── linter.py                   # Report linter L-01–L-10 (QA layer)
+│   │   ├── qa.py                       # QA pipeline: invariants → render → lint → degrade
+│   │   ├── qa_vocab.py                 # Controlled vocabularies (fact strip, abbreviations)
 │   │   └── templates/report.html.j2    # Dashboard template
 │   └── web/
 │       ├── app.py                      # FastAPI server
@@ -198,6 +202,7 @@ API keys never stored raw (redacted in `Finding`, `<REDACTED_API_KEY>` in prompt
 6. Default model `qwen2.5-coder:7b` (8 GB RAM)
 7. Lazy imports (GitPython only on scan → enables Vercel landing)
 8. Security by default
+9. Report QA layer (Sprint 0.2): prose composed only from human-written ICU templates + KB labels + finite vocabularies (never raw repo strings); all arithmetic in the data layer behind invariants; linter degrades broken sentences to fact strips (degrade, never fail); no PyICU — small deterministic ICU-subset renderer instead (offline-install principle)
 
 ## Project conventions
 

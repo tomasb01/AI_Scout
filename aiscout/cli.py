@@ -83,10 +83,16 @@ def cli():
     help="Low-sensitivity scan: read only dependency manifests "
          "(requirements.txt, package.json, pyproject.toml), never source code",
 )
+@click.option(
+    "--strict",
+    is_flag=True,
+    help="CI mode: exit non-zero when the report QA linter suppressed "
+         "any sentence (production default is degrade, not fail)",
+)
 def scan(
     repo, local, org, config, token, branch,
     include_archived, include_forks, max_repos, output,
-    llm_url, llm_model, llm_mode, llm_key, no_llm, manifests_only,
+    llm_url, llm_model, llm_mode, llm_key, no_llm, manifests_only, strict,
 ):
     """Scan Git repositories for AI assets."""
     # Build list of repos to scan
@@ -225,6 +231,18 @@ def scan(
 
     # Print summary
     _print_summary(scan_results, report_path)
+
+    # QA gate (Sprint 0.2): degradation never fails a production scan
+    # (P-4), but CI can insist the report needed no suppression.
+    qa_counts = gen.qa_result.counts() if gen.qa_result else {"suppressed": 0, "warnings": 0}
+    if qa_counts["suppressed"] or qa_counts["warnings"]:
+        console.print(
+            f"[yellow]QA linter:[/] {qa_counts['suppressed']} sentence(s) suppressed, "
+            f"{qa_counts['warnings']} warning(s) — see the QA appendix in the report."
+        )
+    if strict and qa_counts["suppressed"]:
+        console.print("[red]--strict:[/] failing because the QA linter suppressed output.")
+        sys.exit(2)
 
 
 _ALLOWED_URL_SCHEMES = {"https", "http", "ssh", "git"}

@@ -334,6 +334,32 @@ Audit aktuálního reportu odhalil, že vizuální design neodráží Sprint 5 c
 
 ---
 
+## Sprint 0.2 — QA vrstva reportu (8. července 2026, v0.9.0)
+
+Zadání: `01_Prod_specs/specs/AI_Scout_QA_spec.md`. Cíl: v no-LLM režimu report nikdy neukáže rozbitou, nesmyslnou nebo z kódu prosáklou větu.
+
+### Co vzniklo
+
+- **`aiscout/report/qa_vocab.py`** — kontrolované slovníky (P-1): zkratky pro L-07, počitatelná substantiva pro L-10, stop-list pro L-05, labely fact stripu (sources/sinks/pattern), konečný slovník důvodů pro I-02, labely citlivých kategorií.
+- **`aiscout/report/insights.py`** — typovaný insight katalog **I-01–I-10** (datový model dle QA spec §1.1), ICU MessageFormat šablony + vlastní deterministický mini-ICU renderer (plural =N/one/other, select, `#`, date medium). *Rozhodnutí: PyICU nepřidán — C extenze proti systémové ICU knihovně jde proti „10minutové offline instalaci"; renderer má ~100 řádků a plné pokrytí testy.* Jediná pct funkce s explicitním jmenovatelem; `validate_invariants` (§3) běží před renderem a padá tvrdě.
+- **`aiscout/report/linter.py`** — pravidla **L-01–L-10** nad finálním vyrenderovaným textem: zdvojená slova, nepárové závorky/uvozovky, nevyřešené placeholdery, osiřelá interpunkce, useknuté věty, >100 %, prosáknutí kódu do prózy (se safe-token maskováním KB labelů a git identit), duplicitní summary (L-08, cross-entity), délkové meze, nesoulad plurálu.
+- **`aiscout/report/qa.py`** — pipeline `prepare_qa`: data → invarianty → render → linter → degradace. **Fact strip** (Sources/Sinks/Pattern/Tech z kontrolovaného slovníku) jako default detail v no-LLM režimu (P-3); LLM próza jen unikátní a lint-čistá, jinak degradace (P-4). LLM próza je vyjmuta z L-07 (legitimně odkazuje na kód, nese štítek LLM).
+- **HTML report** — exec summary z typovaných insightů (severity tečky), detail řešení: fact strip `RULE` / LLM próza `LLM` (provenance štítky), recommendations přes linter, **QA appendix** („Suppressed by QA linter", sbalený) + QA counts ve footeru.
+- **JSON export** — `schema_version` 1.1.0 → **1.2.0** (aditivně): `insights` (typovaný katalog) + `qa` (suppressed/warnings). Stejná pipeline jako HTML — identické věty i suprese.
+- **CLI** — `aiscout scan --strict`: nenulový exit (2) při jakékoli supresi; produkční default zůstává degradace, ne pád (P-4).
+
+### QA vrstva chytila vlastní chyby už při vývoji
+
+Edge-case testy + linter odhalily 3 reálné kompoziční chyby šablon ještě před mergem: „all **1 solutions**" (I-04 při total=1), „used by 1 of **1 solutions**" (I-05), „**1 files** scanned" (I-01). Fix: plural větev pro files (šablona `T-INVENTORY-v2`) a trigger `total ≥ 2` pro koncentrační insighty I-04/I-05.
+
+### Výsledky
+
+- **248 testů passing** (+105: edge-case matice všech 10 šablon vč. povinného pct=100, kartézský součin kategorií I-07, všechna pravidla linteru, degradační pipeline, determinismus HTML, --strict gate)
+- Nový golden: `tests/regression/golden_qa.json` (insight věty + QA counts + fact strips nad fixtures)
+- Akceptační kritéria QA spec §5: všechna splněna — fixture „1 přispěvatel" renderuje „A single contributor … created all N solutions" (žádné „over 100%"), duplicitní summaries degradují na fact strip, dvojí běh = bitově shodný výstup, `--strict` vrací nenulový exit code
+
+---
+
 ## Otevřené body
 
 1. **Report redesign** — implementovat vybranou variantu (nebo mix) jako nový `report.html.j2`

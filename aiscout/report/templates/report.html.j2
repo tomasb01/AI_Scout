@@ -118,8 +118,30 @@ footer{text-align:center;color:var(--text-dim);font-size:.65rem;margin-top:2rem;
 .exec h2::before{content:"";display:inline-block;width:4px;height:18px;background:var(--accent);border-radius:2px}
 .exec ul{list-style:none;font-size:.85rem;line-height:1.8}
 .exec li{padding:.25rem 0;border-bottom:1px solid rgba(99,102,241,0.12)}.exec li:last-child{border:none}
-.exec li::before{content:"";display:inline-block;width:6px;height:6px;border-radius:50%;background:var(--accent);margin-right:.6rem;vertical-align:middle}
+.exec li .ei-dot{display:inline-block;width:6px;height:6px;border-radius:50%;background:var(--accent);margin-right:.6rem;vertical-align:middle}
+.exec li.ei-critical .ei-dot{background:var(--critical)}
+.exec li.ei-warning .ei-dot{background:var(--warning)}
 .exec strong{color:#fff}
+
+/* Fact strip (QA layer P-3: facts as default, sentences as add-on) */
+.fact-strip{display:grid;grid-template-columns:70px 1fr;gap:.15rem .6rem;font-size:.72rem}
+.fact-strip .fs-l{color:var(--text-dim);font-weight:600;text-transform:uppercase;font-size:.62rem;padding-top:.1rem}
+.fact-strip .fs-v{font-family:'SF Mono','Fira Code',monospace;color:var(--text)}
+.prov-chip{display:inline-block;font-size:.55rem;font-weight:700;letter-spacing:.05em;padding:.05rem .35rem;border-radius:3px;vertical-align:middle;margin-left:.4rem}
+.prov-chip.rule{background:rgba(34,197,94,0.12);color:var(--ok)}
+.prov-chip.llm{background:rgba(99,102,241,0.15);color:var(--accent)}
+
+/* QA appendix */
+.qa-appendix{margin-top:1.2rem}
+.qa-appendix summary{list-style:none;cursor:pointer;font-size:.7rem;color:var(--text-dim)}
+.qa-appendix summary::-webkit-details-marker{display:none}
+.qa-appendix summary::before{content:"▸ ";font-size:.6rem}
+.qa-appendix[open] summary::before{content:"▾ "}
+.qa-issue{font-size:.68rem;padding:.3rem 0;border-bottom:1px solid var(--border);color:var(--text-muted)}
+.qa-issue .qa-rule{font-weight:700;margin-right:.4rem}
+.qa-issue.qa-error .qa-rule{color:var(--critical)}
+.qa-issue.qa-warn .qa-rule{color:var(--warning)}
+.qa-issue .qa-text{font-family:'SF Mono','Fira Code',monospace;color:var(--text-dim);display:block;margin-top:.1rem}
 
 /* GitHub coverage / org inventory */
 .ghcov{background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:1.2rem 1.5rem;margin-bottom:1.5rem}
@@ -269,13 +291,13 @@ footer{text-align:center;color:var(--text-dim);font-size:.65rem;margin-top:2rem;
 </div>
 {% endif %}
 
-{# ═══ EXECUTIVE SUMMARY ═══ #}
-{% if exec_summary %}
+{# ═══ EXECUTIVE SUMMARY — typed insights I-01–I-10 (QA layer) ═══ #}
+{% if exec_insights %}
 <div class="exec">
   <h2>Executive Summary</h2>
   <ul>
-    {% for point in exec_summary %}
-    <li>{{ point | md_bold | safe }}</li>
+    {% for ins in exec_insights %}
+    <li class="ei-{{ ins.severity }}"><span class="ei-dot"></span>{{ ins.text }}</li>
     {% endfor %}
   </ul>
 </div>
@@ -459,7 +481,9 @@ footer{text-align:center;color:var(--text-dim);font-size:.65rem;margin-top:2rem;
       {% for tag in asset.tags %}<span class="task-tag t-{{ tag }}">{{ tag | replace('_',' ') }}</span>{% endfor %}
     </div>
     {% endif %}
-    <div class="sol-desc">{{ insight.summary[:120] if insight else '' }}{% if insight and insight.summary | length > 120 %}...{% endif %}</div>
+    {% set prose = summary_display.get(asset.id) %}
+    {% set strip = fact_strips.get(asset.id) %}
+    <div class="sol-desc">{% if prose %}{{ prose[:120] }}{% if prose | length > 120 %}...{% endif %}{% elif strip %}{{ strip.pattern }} · {{ strip.sinks[:2] | join(' · ') }}{% endif %}</div>
   </td>
   <td style="font-size:.75rem;color:var(--text-muted)">{{ asset.repository }}</td>
   <td>
@@ -492,11 +516,24 @@ footer{text-align:center;color:var(--text-dim);font-size:.65rem;margin-top:2rem;
 <td colspan="6" class="detail-cell">
 <div class="detail-grid">
   <div>
-    {# Summary #}
+    {# Summary — LLM prose when it carries information, else fact strip
+       from controlled vocabulary (QA spec P-3). #}
+    {% if prose %}
     <div class="detail-section">
-      <h4>Summary</h4>
-      <p style="font-size:.78rem;color:var(--text)">{{ insight.summary if insight else 'No analysis available.' }}</p>
+      <h4>Summary<span class="prov-chip llm">LLM</span></h4>
+      <p style="font-size:.78rem;color:var(--text)">{{ prose }}</p>
     </div>
+    {% elif strip %}
+    <div class="detail-section">
+      <h4>Facts<span class="prov-chip rule">RULE</span></h4>
+      <div class="fact-strip">
+        <span class="fs-l">Sources</span><span class="fs-v">{{ strip.sources | join(', ') }}</span>
+        <span class="fs-l">Sinks</span><span class="fs-v">{{ strip.sinks | join(', ') }}</span>
+        <span class="fs-l">Pattern</span><span class="fs-v">{{ strip.pattern }}</span>
+        <span class="fs-l">Tech</span><span class="fs-v">{{ strip.tech | join(', ') if strip.tech else 'unclassified' }}</span>
+      </div>
+    </div>
+    {% endif %}
 
     {# Data Flow (Sprint 5) #}
     {% if asset.data_flow and (asset.data_flow.sources or asset.data_flow.sinks or asset.data_flow.processing_steps) %}
@@ -542,11 +579,12 @@ footer{text-align:center;color:var(--text-dim);font-size:.65rem;margin-top:2rem;
     </div>
     {% endif %}
 
-    {# Recommendations #}
-    {% if insight and insight.recommendations %}
+    {# Recommendations — linted action sentences #}
+    {% set recs = recommendations_display.get(asset.id, []) %}
+    {% if recs %}
     <div class="detail-section">
       <h4>Recommendations</h4>
-      <ul class="rec-list">{% for r in insight.recommendations %}<li>{{ r }}</li>{% endfor %}</ul>
+      <ul class="rec-list">{% for r in recs %}<li>{{ r }}</li>{% endfor %}</ul>
     </div>
     {% endif %}
   </div>
@@ -637,7 +675,22 @@ footer{text-align:center;color:var(--text-dim);font-size:.65rem;margin-top:2rem;
   </ul>
 </div>
 
-<footer>Generated by AI Scout v{{ version }} · Provider KB {{ kb_version }}</footer>
+{# ═══ QA APPENDIX — sentences suppressed or flagged by the report linter ═══ #}
+{% if qa_issues %}
+<details class="qa-appendix">
+  <summary>Suppressed by QA linter ({{ qa_counts.suppressed }} suppressed, {{ qa_counts.warnings }} warnings)</summary>
+  {% for issue in qa_issues %}
+  <div class="qa-issue {% if issue.severity == 'ERROR' %}qa-error{% else %}qa-warn{% endif %}">
+    <span class="qa-rule">{{ issue.rule }} {{ issue.severity }}</span>{{ issue.message }}
+    {% if issue.template_id %}<span style="color:var(--text-dim)"> · {{ issue.template_id }}</span>{% endif %}
+    {% if issue.entity_id %}<span style="color:var(--text-dim)"> · {{ issue.entity_id }}</span>{% endif %}
+    <span class="qa-text">{{ issue.text }}</span>
+  </div>
+  {% endfor %}
+</details>
+{% endif %}
+
+<footer>Generated by AI Scout v{{ version }} · Provider KB {{ kb_version }} · QA: {{ qa_counts.suppressed }} suppressed / {{ qa_counts.warnings }} warnings</footer>
 </div>
 
 <script>
