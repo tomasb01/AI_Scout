@@ -135,17 +135,26 @@ def _top_level_dir(solution_dir: str) -> str:
 
 
 def _manifest_dirs(assets: list[AIAsset]) -> set[str]:
-    """Directories that carry a dependency manifest.
+    """Subdirectories that carry a dependency manifest.
 
     Derived from the dependency findings the scanner already produced —
     no filesystem access, works identically for local and remote scans.
+
+    The repo root is deliberately EXCLUDED: a root manifest would fold
+    every top-level branch of a monorepo into one blob and hide exactly
+    the granularity Scout exists to show — distinct AI solutions living
+    in different sub-branches (a hook-triggered agent in hooks/, a
+    chatbot in services/). Granular scouting inside the repo is the
+    product's added value; a subdirectory manifest still folds its own
+    subtree, because that IS one service.
     """
     dirs: set[str] = set()
     for asset in assets:
         for f in asset.raw_findings:
             if f.type == FindingType.DEPENDENCY_DETECTED:
                 parts = PurePosixPath(f.file_path).parts
-                dirs.add(str(PurePosixPath(*parts[:-1])) if len(parts) > 1 else ".")
+                if len(parts) > 1:
+                    dirs.add(str(PurePosixPath(*parts[:-1])))
     return dirs
 
 
@@ -206,6 +215,7 @@ def _merge(
         risk_status=risk_status,
         discovered_via=sorted({d for a in group for d in a.discovered_via}),
         repository=repo_name,
+        root_path=root,
         file_path=", ".join(files),
         dependencies=deps,
         raw_findings=findings,

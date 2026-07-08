@@ -246,6 +246,10 @@ class AIAsset(BaseModel):
     # solution (evidence for "solution = application/service"). Empty for
     # solutions that are still a single directory.
     component_dirs: list[str] = []
+    # Where in the repo tree this solution lives (its root directory,
+    # "." for repo root). Structure is information: the report shows
+    # granularly where each AI solution/agent sits inside the repo.
+    root_path: str = ""
 
 
 class ScannerConfig(BaseModel):

@@ -132,6 +132,7 @@ footer{text-align:center;color:var(--text-dim);font-size:.65rem;margin-top:2rem;
 .prov-chip.llm{background:rgba(99,102,241,0.15);color:var(--accent)}
 .char-badge{display:inline-block;font-size:.6rem;font-weight:700;padding:.08rem .45rem;border-radius:3px;margin-left:.5rem;background:rgba(245,158,11,0.12);color:var(--warning);vertical-align:middle}
 .comp-tag{display:inline-block;font-size:.6rem;padding:.05rem .4rem;border-radius:3px;background:var(--accent-bg);color:var(--accent);margin-left:.4rem;vertical-align:middle}
+.sol-path{font-family:'SF Mono','Fira Code',monospace;font-size:.62rem;color:var(--text-dim);margin-top:.1rem}
 
 /* QA appendix */
 .qa-appendix{margin-top:1.2rem}
@@ -478,6 +479,7 @@ footer{text-align:center;color:var(--text-dim);font-size:.65rem;margin-top:2rem;
 <tr class="sol-row" data-risk="{{ risk }}" data-repo="{{ asset.repository }}" data-cat="{{ cat }}" data-id="{{ asset.id }}">
   <td>
     <div class="sol-name">{{ insight.solution_name if insight and insight.solution_name else asset.name }}{% if asset.component_dirs | length > 1 %}<span class="comp-tag" title="{{ asset.component_dirs | join(', ') }}">{{ asset.component_dirs | length }} components</span>{% endif %}</div>
+    {% if asset.root_path %}<div class="sol-path">{{ '/' if asset.root_path == '.' else asset.root_path }}</div>{% endif %}
     {% if asset.tags %}
     <div style="margin-top:.15rem">
       {% for tag in asset.tags %}<span class="task-tag t-{{ tag }}">{{ tag | replace('_',' ') }}</span>{% endfor %}

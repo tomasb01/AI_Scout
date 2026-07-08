@@ -1100,6 +1100,7 @@ class GitScanner(BaseScanner):
                 risk_status=risk_status,
                 discovered_via=["git_scanner"],
                 repository=repo_name,
+                root_path=solution_dir,
                 file_path=", ".join(file_paths),
                 dependencies=deps,
                 raw_findings=dir_findings,

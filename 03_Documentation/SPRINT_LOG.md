@@ -400,6 +400,8 @@ Scan tří reálných rep (AI-developer-3, AI-Agents-2 — výuková; Fleurdin_A
 
 Critical status je lokalizovaný do konkrétní kapitoly (uniklé HF klíče = kapitola Hugging Face + archiv Old), ne rozmazaný přes celé repo. Exec summary: „Found 27 AI solutions across 3 repositories" — důvěryhodné a informativní. +2 regresní testy (repo-level produkční signály, sémantická podmínka), fixture rozšířena o vnořené pod-příklady (10 lekcí × 2 → 10 kapitol).
 
+4. **Granularita > konsolidace** (feedback Tomáše, druhá iterace) — přidaná hodnota Scouta je granulární scouting UVNITŘ repa: v monorepu může v každé podvětvi žít jiné AI řešení (hook v určité fázi procesu spouští agenta) a struktura sama je informace („kde v repu agenti jsou"). Fix: (a) **root manifest už neskládá** — foldují jen pod-adresářové manifesty (svc/handlers → svc = jedna služba; root requirements.txt nesmí spolknout celé monorepo); (b) každé řešení nese **`root_path`** — cesta v repu viditelná v tabulce reportu (monospace pod jménem) i v JSON (`solutions[].path`). Fleurdin: 10 → **12 granulárních řešení**, každé s cestou (`5-Backend`, `4-RAG_Pipeline`, `[ARCHIVE]/3-Fine_tuning`…), slepenec tří složek pod root manifestem zmizel. Vedlejší efekt: CI workflow s AI voláním (`.github/workflows`) je viditelné jako samostatné řešení — přesně hook scénář. +1 monorepo regresní test.
+
 ---
 
 ## Otevřené body

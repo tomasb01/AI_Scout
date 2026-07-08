@@ -217,6 +217,8 @@ class JSONExporter:
             # Sprint 0.3 aggregation boundary: directories folded into
             # this solution ([] = still a single directory)
             "components": list(getattr(asset, "component_dirs", [])),
+            # where in the repo tree this solution lives ("." = root)
+            "path": getattr(asset, "root_path", ""),
         }
 
         if asset.provider:

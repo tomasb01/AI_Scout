@@ -104,6 +104,7 @@ def _dir_asset(repo: str, solution_dir: str, files: list[str],
         id="sol-" + _stable_hash(repo, solution_dir),
         name=solution_dir,
         repository=repo,
+        root_path=solution_dir,
         file_path=", ".join(files),
         raw_findings=findings or [],
     )
@@ -147,6 +148,28 @@ def test_no_manifest_ancestor_keeps_directory_identity():
     )
     assert {a.id for a in merged} == {a.id for a in assets}
     assert all(a.component_dirs == [] for a in merged)
+
+
+def test_root_manifest_never_swallows_monorepo_branches():
+    """Granular scouting is the product's value: a monorepo with a root
+    manifest still shows the hook-triggered agent in hooks/ and the
+    chatbot in services/ as distinct solutions with their own paths —
+    the root manifest must not fold the whole repo into one blob."""
+    repo = "monorepo"
+    assets = [
+        _dir_asset(repo, ".", ["requirements.txt"],
+                   [_dep_finding("requirements.txt")]),
+        _dir_asset(repo, "hooks/on-ticket-created", ["hooks/on-ticket-created/agent.py"]),
+        _dir_asset(repo, "services/chatbot", ["services/chatbot/bot.py"]),
+    ]
+    merged = aggregate_assets(
+        assets, repo, RepoCharacter(KIND_PRODUCTION, "high"), _stable_hash
+    )
+    assert len(merged) == 3
+    assert {a.id for a in merged} == {a.id for a in assets}
+    assert sorted(a.root_path for a in merged) == [
+        ".", "hooks/on-ticket-created", "services/chatbot",
+    ]
 
 
 def test_sibling_manifests_stay_separate():
