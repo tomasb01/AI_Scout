@@ -4,6 +4,7 @@ Enterprise AI Discovery & Security Assessment Tool.
 Self-hosted, open-source (BSL), CLI + Web UI.
 
 **Current status: v0.8.0** — functional end-to-end product, 5 sprints + Sprint 0.1 (stable IDs, risk-status model) completed, ~141 tests passing.
+**Orientation: start with `00_PROJECT_MAP.md`** (document hierarchy, sprint roadmap, where we are, next steps).
 Full status: `03_Documentation/PROJECT_STATUS.md` · Sprint detail: `03_Documentation/SPRINT_LOG.md`
 
 ## What is this

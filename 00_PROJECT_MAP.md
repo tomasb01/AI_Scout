@@ -1,0 +1,78 @@
+# AI Scout — Mapa projektu (začni tady)
+
+> Jeden dokument, který říká, co je kde, co je zdroj pravdy, co je hotové a co dělat dál.
+> Aktualizuj při merge každého sprintu.
+
+**Stav: v0.8.0 · větev `claude/review-prod-spec-v10-51Tgp` · 141 testů · dokončen Sprint 0.1**
+
+---
+
+## 1. Hierarchie dokumentů (co je co a co platí)
+
+Dokumenty mají tři úrovně. Když si odporují, platí vyšší úroveň:
+
+| Úroveň | Dokument | Role |
+|--------|----------|------|
+| **1. STRATEGIE** | `01_Prod_specs/AI_Scout_Product_Spec_v13.docx` | **Jediný platný produktový spec.** Scope, descopy (Appendix A), pricing, sprintová roadmapa (§15). Starší verze (v6–v10) jsou v `[Archive]/` a NEPLATÍ. |
+| **2. OPERATIVA** | `01_Prod_specs/AI_Scout_Vyvojovy_plan.docx` | Companion ke Spec v13: rozpis sprintů — co přesně, v jakém pořadí, kritéria „hotovo když", odkazy na zadání. |
+| **3. IMPLEMENTAČNÍ ZADÁNÍ** | `01_Prod_specs/specs/*.md` | Detailní zadání pro konkrétní sprinty (viz §2). |
+
+Pomocné: `README_BUNDLE.md` (mapa balíčku podkladů + poznámka k AIAsset.id re-baseline) · `02_Architecture/` (technické popisy hotových komponent) · `03_Documentation/` (stav projektu, sprint log, access strategie).
+
+## 2. Podkladové dokumenty → sprinty
+
+| Dokument | Slouží pro | Stav sprintu |
+|----------|-----------|--------------|
+| `01_Prod_specs/specs/AI_Scout_datamodel_org_cost.md` | **Sprint 0.1** (stabilní ID, risk_status) + **Sprint 4** (org dimenze, cost observables) | 0.1 ✅ hotový · 4 ⏳ |
+| `01_Prod_specs/specs/AI_Scout_QA_spec.md` | **Sprint 0.2** — insight katalog I-01–I-10, linter L-01–L-10, fact strip, degradace | ⏳ **další na řadě** |
+| `01_Prod_specs/specs/AI_Scout_AIBOM_mapping.md` | **Sprint 5b** — CycloneDX ML-BOM export dle G7 | ⏳ |
+| `01_Prod_specs/specs/AI_Scout_product_plan.md` | Širší kontext (AIBOM strategie, rizika); při konfliktu má přednost Spec v13 | referenční |
+| `prototypes/ai_scout_report_design.html` | Cílová podoba reportu (Sprint 0.2) | referenční |
+| `prototypes/ai_scout_mode_comparison.html` | Web: srovnání static vs. LLM režimu | referenční |
+| `prototypes/ai_scout_descent_concept.html` | Koncept „Sestup" (L0–L3) — cílová IA reportu po cost datech | referenční |
+
+## 3. Co je implementované (kód, větev `claude/review-prod-spec-v10-51Tgp`)
+
+**Základ v0.7.0 (main):** Git Scanner → Code Context Extractor → Data Flow Mapper (rule-based) → LLM Engine (Ollama/OpenAI-compat, volitelný) → Enrichment → HTML report + JSON export · Web UI · CLI · Docker · security hardening.
+
+**Navíc na této větvi (proti main, 13 commitů):**
+1. `--org` sken celé GitHub organizace (`aiscout/scanners/github_org.py`) + filtry + sekce „GitHub Coverage" v reportu
+2. `--manifests-only` nízkocitlivostní sken (jen dependency manifesty)
+3. `aiscout check` — pre-commit/CI guardrail (klíče + citlivý egress) + `.pre-commit-hooks.yaml` + `examples/ai-scout-guardrail.yml`
+4. `03_Documentation/GITHUB_ACCESS_STRATEGY.md` — přístupy od jednotlivce po enterprise
+5. **Sprint 0.1:** stabilní ID (`sol-`/`f-` hashe), dvouosý model severity × confidence + `risk_status` (vážené skóre odstraněno), „No findings" místo „OK", verze Scout+KB v hlavičce reportu, Scope & Limitations, JSON `schema_version 1.1.0`, deterministický výstup (`AISCOUT_TIMESTAMP`)
+
+Detailní stav: `03_Documentation/PROJECT_STATUS.md` · pro AI asistenty: `CLAUDE.md`.
+
+## 4. Sprintová roadmapa a kde v ní jsme
+
+| Sprint | Obsah | Zadání | Stav |
+|--------|-------|--------|------|
+| 0.1 | Stabilní ID + risk status model | datamodel spec §1–§2 | ✅ **hotový** (v0.8.0) |
+| **0.2** | **QA vrstva reportu (insighty, linter, fact strip)** | **QA spec** | ⏳ **← jsme tady** |
+| 0.3 | Agregační hranice + detektor tutorial/produkce + install | QA spec + Spec v13 §3.4 | ⏳ (po něm: validační sken reálné org přes `--org`) |
+| 1 | SARIF export | Spec v13 §15 | ⏳ (odemčeno — stabilní ID hotové) |
+| 2 | Diff / trend režim | datamodel spec (finding stavy) | ⏳ |
+| 3 | MCP & Agent scanner (launch feature) | Spec v13 §15 | ⏳ |
+| 4 | SCM abstrakce + GitLab + org/cost observables | datamodel spec §2–§3 | ⏳ |
+| 5 / 5b | KB Premium Feed / AIBOM export | AIBOM mapping | ⏳ |
+| 6 | Compliance reporting | Spec v13 §15 | ⏳ |
+
+Paralelně (mimo kód): threat model dokument, veřejné repo+README po Sprintu 0, pilot outreach (RBCZ/V1).
+
+## 5. Otevřené věci (vyžadují akci)
+
+1. ⚠️ **Chybí `landing/index.html` a `aiscout/web/templates/index.html`** — staré `*.html` pravidlo v `.gitignore` je nikdy nepustilo do gitu; `aiscout web` je v čerstvém klonu rozbité. Soubory existují jen v lokální kopii → commitnout z lokálu (`git add landing/index.html aiscout/web/templates/index.html`).
+2. **Spec v0.14** — zapsat drift větve do specu (org sken, guardrail, Sprint 0.1, 141 testů); podle domluvy připraví strategická konverzace.
+3. Merge větve do `main` (zatím bez PR).
+
+## 6. Jak pokračovat v terminálu
+
+```bash
+git checkout claude/review-prod-spec-v10-51Tgp && git pull
+uv sync
+uv run pytest tests/ -q          # očekávej: 141 passed
+uv run aiscout scan --local tests/fixtures --no-llm -o report.html   # ukázka výstupu
+```
+
+Další práce = **Sprint 0.2**: otevři `01_Prod_specs/specs/AI_Scout_QA_spec.md` (zadání) + `prototypes/ai_scout_report_design.html` (cíl); implementace půjde do `aiscout/report/html.py` + šablony + `aiscout/engine/enrichment.py`.
