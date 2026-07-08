@@ -387,9 +387,11 @@ class GitScanner(BaseScanner):
         try:
             root, cleanup, repo_name = self._resolve_repo()
 
+            scanned_rel_paths: list[str] = []
             for file_path in self._walk_files(root):
                 files_scanned += 1
                 rel_path = str(file_path.relative_to(root))
+                scanned_rel_paths.append(rel_path)
 
                 # ── Manifest-only mode: read dependency manifests only ──
                 if self.manifests_only:
@@ -472,6 +474,23 @@ class GitScanner(BaseScanner):
 
             assets = self._group_findings_into_assets(all_findings, repo_name)
 
+            # ── Sprint 0.3: repo character + aggregation boundary ──
+            # Directory grouping above is the mechanism; here the repo is
+            # classified (production │ tutorial_example │ experiment │
+            # unknown) and components are folded into application-level
+            # solutions (tutorial collapse, manifest roots).
+            from aiscout.engine.aggregation import aggregate_assets
+            from aiscout.engine.repo_character import detect_repo_character
+
+            character = detect_repo_character(
+                scanned_rel_paths,
+                solution_dirs=[_get_solution_dir(f.file_path) for f in all_findings],
+                readme_text=self._read_root_readme(root),
+            )
+            assets = aggregate_assets(
+                assets, repo_name, character, stable_hash=_stable_hash
+            )
+
             # Extract git authors for each asset
             self._enrich_with_git_authors(root, assets)
 
@@ -489,6 +508,7 @@ class GitScanner(BaseScanner):
                     "files_scanned": files_scanned,
                     "repo_root": str(root),
                     "repo_url": self.repo_url or "",
+                    "repo_character": character.to_dict(),
                 },
             )
 
@@ -611,6 +631,19 @@ class GitScanner(BaseScanner):
             return path.read_text(encoding="utf-8", errors="ignore")
         except (OSError, UnicodeDecodeError):
             return None
+
+    def _read_root_readme(self, root: Path) -> str:
+        """Head of the repo-root README for the repo character detector.
+
+        Symlinked READMEs are skipped (same guard as the main walk).
+        """
+        for name in ("README.md", "README.rst", "README.txt", "README"):
+            candidate = root / name
+            if candidate.is_file() and not candidate.is_symlink():
+                content = self._read_file(candidate)
+                if content:
+                    return content[:4000]
+        return ""
 
     def _extract_notebook_source(self, content: str) -> str:
         """Extract source code from Jupyter notebook JSON."""

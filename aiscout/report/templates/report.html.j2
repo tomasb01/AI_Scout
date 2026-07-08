@@ -130,6 +130,8 @@ footer{text-align:center;color:var(--text-dim);font-size:.65rem;margin-top:2rem;
 .prov-chip{display:inline-block;font-size:.55rem;font-weight:700;letter-spacing:.05em;padding:.05rem .35rem;border-radius:3px;vertical-align:middle;margin-left:.4rem}
 .prov-chip.rule{background:rgba(34,197,94,0.12);color:var(--ok)}
 .prov-chip.llm{background:rgba(99,102,241,0.15);color:var(--accent)}
+.char-badge{display:inline-block;font-size:.6rem;font-weight:700;padding:.08rem .45rem;border-radius:3px;margin-left:.5rem;background:rgba(245,158,11,0.12);color:var(--warning);vertical-align:middle}
+.comp-tag{display:inline-block;font-size:.6rem;padding:.05rem .4rem;border-radius:3px;background:var(--accent-bg);color:var(--accent);margin-left:.4rem;vertical-align:middle}
 
 /* QA appendix */
 .qa-appendix{margin-top:1.2rem}
@@ -245,7 +247,7 @@ footer{text-align:center;color:var(--text-dim);font-size:.65rem;margin-top:2rem;
   <div class="hero-meta">{{ scan_date }}{% if all_authors %} · {{ all_authors | length }} contributor{{ 's' if all_authors | length != 1 }}{% endif %} · Scout v{{ version }} · KB {{ kb_version }}</div>
   <div class="repo-chips">
     {% for rd in repo_details %}
-    <div class="rc"><b>{{ rd.name }}</b> <span>{{ rd.branch }} · {{ rd.files_scanned }} files · {{ rd.assets_found }} assets</span></div>
+    <div class="rc"><b>{{ rd.name }}</b> <span>{{ rd.branch }} · {{ rd.files_scanned }} files · {{ rd.assets_found }} assets</span>{% if rd.character.kind == 'tutorial_example' %}<span class="char-badge" title="Signals: {{ rd.character.signals | join(', ') }}">tutorial / example repo</span>{% elif rd.character.kind == 'experiment' %}<span class="char-badge" title="Signals: {{ rd.character.signals | join(', ') }}">experiment repo</span>{% endif %}</div>
     {% endfor %}
   </div>
 </div></div>
@@ -475,7 +477,7 @@ footer{text-align:center;color:var(--text-dim);font-size:.65rem;margin-top:2rem;
 {% set cat = insight.category if insight else 'Other' %}
 <tr class="sol-row" data-risk="{{ risk }}" data-repo="{{ asset.repository }}" data-cat="{{ cat }}" data-id="{{ asset.id }}">
   <td>
-    <div class="sol-name">{{ insight.solution_name if insight and insight.solution_name else asset.name }}</div>
+    <div class="sol-name">{{ insight.solution_name if insight and insight.solution_name else asset.name }}{% if asset.component_dirs | length > 1 %}<span class="comp-tag" title="{{ asset.component_dirs | join(', ') }}">{{ asset.component_dirs | length }} components</span>{% endif %}</div>
     {% if asset.tags %}
     <div style="margin-top:.15rem">
       {% for tag in asset.tags %}<span class="task-tag t-{{ tag }}">{{ tag | replace('_',' ') }}</span>{% endfor %}

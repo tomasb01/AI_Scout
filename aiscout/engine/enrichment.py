@@ -50,8 +50,11 @@ def enrich_asset(asset: AIAsset) -> AssetInsight:
 
     # Sprint 2 — attach task_types + tags BEFORE the rest so downstream
     # builders (summary, risk reasons, recommendations) can reference them.
+    # Union with existing tags: the scanner marks aggregation facts
+    # (e.g. "tutorial_collection", Sprint 0.3) that keyword derivation
+    # cannot see and must not wipe.
     asset.task_types = _detect_task_types(asset)
-    asset.tags = _derive_tags(asset)
+    asset.tags = sorted(set(asset.tags) | set(_derive_tags(asset)))
 
     summary = _build_summary(asset, provider)
     risk_reasons = _build_risk_reasons(asset, provider)
@@ -1717,6 +1720,7 @@ def _derive_solution_display_name(asset: AIAsset, category: str) -> str:
     """Derive a name that describes WHAT the solution does, not what framework it uses.
 
     Priority:
+    0. Aggregated teaching collection keeps its scanner label (Sprint 0.3)
     1. README title (if meaningful)
     2. Specific prompt role ("Joe Rogan voice clone", "Fleurdin florist assistant")
     3. Purpose from key functions ("Stock Price & Dividend Checker")
@@ -1724,6 +1728,13 @@ def _derive_solution_display_name(asset: AIAsset, category: str) -> str:
     5. Directory-based name (last resort)
     """
     import re
+
+    # ── 0. Tutorial collection ──
+    # The aggregation layer collapsed a teaching repo into one solution
+    # with a deliberate "<repo> teaching collection (N examples)" label;
+    # a README title from lesson 1 must not overwrite it.
+    if "tutorial_collection" in asset.tags:
+        return asset.name
 
     # ── 1. README title ──
     _readme_noise_titles = {

@@ -53,6 +53,10 @@ class JSONExporter:
                 "files_scanned": result.metadata.get("files_scanned", 0),
                 "assets_found": len(result.assets),
                 "errors": len(result.errors),
+                # Sprint 0.3 — observable with evidence, never a verdict
+                "character": result.metadata.get("repo_character", {
+                    "kind": "unknown", "confidence": "low", "signals": [],
+                }),
                 "started_at": result.started_at.isoformat() if result.started_at else None,
                 "completed_at": result.completed_at.isoformat() if result.completed_at else None,
             })
@@ -156,7 +160,13 @@ class JSONExporter:
             # (datamodel spec §1.1-1.2).
             # 1.2.0: adds "insights" (typed catalog I-01–I-10) and "qa"
             # (linter suppression/warning counts).
-            "schema_version": "1.2.0",
+            # 1.3.0: adds repositories[].character (repo character
+            # observable) and solutions[].components (aggregation
+            # boundary evidence). NOTE: solution IDs were re-baselined in
+            # v0.10.0 when the aggregation boundary promoted the ID hash
+            # root from directory to aggregation root (accepted one-time
+            # break, README_BUNDLE.md).
+            "schema_version": "1.3.0",
             "scout_version": _scout_version(),
             "kb_version": KB_VERSION,
             "mode": "llm_enriched" if any(
@@ -204,6 +214,9 @@ class JSONExporter:
             "task_types": [t.value for t in getattr(asset, "task_types", [])],
             "tags": list(getattr(asset, "tags", [])),
             "dependencies": asset.dependencies,
+            # Sprint 0.3 aggregation boundary: directories folded into
+            # this solution ([] = still a single directory)
+            "components": list(getattr(asset, "component_dirs", [])),
         }
 
         if asset.provider:

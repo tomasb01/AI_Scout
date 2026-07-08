@@ -3,7 +3,7 @@
 Enterprise AI Discovery & Security Assessment Tool.
 Self-hosted, open-source (BSL), CLI + Web UI.
 
-**Current status: v0.9.0** — functional end-to-end product, 5 sprints + Sprint 0.1 (stable IDs, risk-status model) + Sprint 0.2 (report QA layer: typed insights, linter, fact strips) completed, 248 tests passing.
+**Current status: v0.10.0** — functional end-to-end product, 5 sprints + Sprint 0 complete (0.1 stable IDs & risk status · 0.2 report QA layer · 0.3 aggregation boundary, repo character detector, install fixes), 261 tests passing.
 **Orientation: start with `00_PROJECT_MAP.md`** (document hierarchy, sprint roadmap, where we are, next steps).
 Full status: `03_Documentation/PROJECT_STATUS.md` · Sprint detail: `03_Documentation/SPRINT_LOG.md`
 
@@ -111,6 +111,8 @@ AI_Scout/
 │   │   ├── code_analyzer.py            # Code Context Extractor (AST + regex)
 │   │   ├── data_flow.py                # Data Flow Mapper (rule-based, ~706 lines)
 │   │   ├── enrichment.py               # Risk, categories, overlap, tags, task types
+│   │   ├── aggregation.py              # Solution = application/service boundary (0.3)
+│   │   ├── repo_character.py           # production/tutorial/experiment detector (0.3)
 │   │   └── llm.py                      # LLM Engine (Ollama / OpenAI-compatible)
 │   ├── knowledge/
 │   │   ├── providers.py                # Provider KB (30+ profiles)

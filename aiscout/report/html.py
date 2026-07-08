@@ -144,6 +144,7 @@ class ReportGenerator:
                 "assets_found": len(result.assets),
                 "errors": len(result.errors),
                 "url": repo_url,
+                "character": result.metadata.get("repo_character", {}),
             })
 
         # Analytics

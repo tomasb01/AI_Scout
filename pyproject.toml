@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "aiscout"
-version = "0.9.0"
+version = "0.10.0"
 description = "AI Scout — Enterprise AI Discovery & Security Assessment Tool"
 requires-python = ">=3.11"
 license = "BUSL-1.1"
@@ -33,6 +33,12 @@ aiscout = "aiscout.cli:cli"
 
 [tool.setuptools.packages.find]
 include = ["aiscout*"]
+
+[tool.setuptools.package-data]
+# Without these the wheel ships no templates and `aiscout scan` /
+# `aiscout web` break on a fresh (non-editable) install — the
+# "download → 10 minutes → result" killer (Sprint 0.3).
+aiscout = ["report/templates/*.j2", "web/templates/*.html"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

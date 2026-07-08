@@ -3,7 +3,7 @@
 > Jeden dokument, který říká, co je kde, co je zdroj pravdy, co je hotové a co dělat dál.
 > Aktualizuj při merge každého sprintu.
 
-**Stav: v0.9.0 · větev `main` · 248 testů · dokončen Sprint 0.2 (QA vrstva reportu)**
+**Stav: v0.10.0 · větev `main` · 261 testů · dokončen Sprint 0.3 (agregační hranice + repo character + install) → Sprint 0 kompletní**
 
 ---
 
@@ -42,6 +42,7 @@ Pomocné: `README_BUNDLE.md` (mapa balíčku podkladů + poznámka k AIAsset.id 
 4. `03_Documentation/GITHUB_ACCESS_STRATEGY.md` — přístupy od jednotlivce po enterprise
 5. **Sprint 0.1:** stabilní ID (`sol-`/`f-` hashe), dvouosý model severity × confidence + `risk_status` (vážené skóre odstraněno), „No findings" místo „OK", verze Scout+KB v hlavičce reportu, Scope & Limitations, JSON `schema_version 1.1.0`, deterministický výstup (`AISCOUT_TIMESTAMP`)
 6. **Sprint 0.2 (v0.9.0):** QA vrstva reportu — typované insighty I-01–I-10 (ICU šablony, mini-ICU renderer bez PyICU), report linter L-01–L-10 s degradací na fact strip, fact strip z kontrolovaného slovníku jako default detail v no-LLM režimu, QA appendix, provenance štítky RULE/LLM, JSON `schema_version 1.2.0` (`insights` + `qa`), `aiscout scan --strict` (moduly `report/qa_vocab.py`, `report/insights.py`, `report/linter.py`, `report/qa.py`)
+7. **Sprint 0.3 (v0.10.0):** agregační hranice (řešení = aplikace/služba; tutorial collapse + manifest roots, `engine/aggregation.py`) + detektor charakteru repa (production│tutorial_example│experiment│unknown, `engine/repo_character.py`) + pročištěný install (fix: wheel bez šablon = rozbitá čerstvá instalace; README přepsán). JSON `schema_version 1.3.0`, proveden plánovaný re-baseline `sol-` ID
 
 Detailní stav: `03_Documentation/PROJECT_STATUS.md` · pro AI asistenty: `CLAUDE.md`.
 
@@ -51,7 +52,8 @@ Detailní stav: `03_Documentation/PROJECT_STATUS.md` · pro AI asistenty: `CLAUD
 |--------|-------|--------|------|
 | 0.1 | Stabilní ID + risk status model | datamodel spec §1–§2 | ✅ **hotový** (v0.8.0) |
 | 0.2 | QA vrstva reportu (insighty, linter, fact strip) | QA spec | ✅ **hotový** (v0.9.0) |
-| **0.3** | **Agregační hranice + detektor tutorial/produkce + install** | QA spec + Spec v13 §3.4 | ⏳ **← jsme tady** (po něm: validační sken reálné org přes `--org`) |
+| 0.3 | Agregační hranice + detektor tutorial/produkce + install | QA spec + Spec v13 §3.4 | ✅ **hotový** (v0.10.0) |
+| **→** | **Validační sken reálné org přes `--org` (100+ řešení)** | validační milník z Vývojového plánu | ⏳ **← jsme tady** |
 | 1 | SARIF export | Spec v13 §15 | ⏳ (odemčeno — stabilní ID hotové) |
 | 2 | Diff / trend režim | datamodel spec (finding stavy) | ⏳ |
 | 3 | MCP & Agent scanner (launch feature) | Spec v13 §15 | ⏳ |
@@ -73,9 +75,9 @@ Paralelně (mimo kód): threat model dokument, veřejné repo+README po Sprintu 
 ```bash
 git checkout main && git pull
 uv sync
-uv run pytest tests/ -q          # očekávej: 248 passed
+uv run pytest tests/ -q          # očekávej: 261 passed
 uv run aiscout scan --local tests/fixtures --no-llm -o report.html   # ukázka výstupu
-uv run aiscout scan --local tests/fixtures --no-llm --strict -o r.html  # CI režim QA linteru
+uv run aiscout scan --local tests/fixtures_tutorial --no-llm -o t.html  # tutorial collapse demo
 ```
 
-Další práce = **Sprint 0.3**: agregační hranice řešení (řešení = aplikace/služba nad directory groupingem) + detektor charakteru repa (production │ tutorial/example │ experiment) + pročištěný install; zadání v QA spec + Spec v13 §3.4. Pozor na plánovaný re-baseline `sol-` ID (README_BUNDLE.md). Po dokončení: validační sken reálné org přes `--org`.
+Další práce = **validační milník po Sprintu 0**: scan reálné Git organizace (100+ řešení) přes `--org` — jediný způsob, jak ověřit agregační hranici a skutečný tvar org dat před investicí do Sprintů 1–3 (SARIF → diff → MCP scanner). Paralelně: threat model dokument + veřejné repo/README (kvalita reportu je po Sprintu 0 obhajitelná).

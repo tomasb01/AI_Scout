@@ -327,7 +327,7 @@ def test_json_export_carries_typed_insights_and_qa_counts():
         gen.generate()
         import json
         data = json.loads(out.read_text(encoding="utf-8"))
-    assert data["schema_version"] == "1.2.0"
+    assert data["schema_version"] == "1.3.0"
     assert data["qa"] == {"suppressed": 0, "warnings": 0}
     ids = [i["id"] for i in data["insights"]]
     assert "I-01" in ids and "I-02" in ids

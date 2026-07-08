@@ -242,6 +242,10 @@ class AIAsset(BaseModel):
     data_flow: DataFlowMap | None = None  # Sprint 5
     task_types: list[TaskType] = []
     tags: list[str] = []
+    # Sprint 0.3 aggregation boundary: directories folded into this
+    # solution (evidence for "solution = application/service"). Empty for
+    # solutions that are still a single directory.
+    component_dirs: list[str] = []
 
 
 class ScannerConfig(BaseModel):

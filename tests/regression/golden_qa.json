@@ -37,22 +37,6 @@
     "Sprint3": {
       "pattern": "RAG pipeline",
       "sinks": [
-        "Azure OpenAI (customer-selected Azure region (EU, US, UK, …))"
-      ],
-      "sources": [
-        "unclassified"
-      ],
-      "tech": [
-        "Azure OpenAI",
-        "ChromaDB",
-        "LangChain",
-        "Ollama",
-        "OpenAI"
-      ]
-    },
-    "Sprint3 — Workflows": {
-      "pattern": "local inference",
-      "sinks": [
         "Anthropic (Claude) (US)"
       ],
       "sources": [
@@ -60,7 +44,12 @@
       ],
       "tech": [
         "Anthropic (Claude)",
-        "Hugging Face"
+        "Azure OpenAI",
+        "ChromaDB",
+        "Hugging Face",
+        "LangChain",
+        "Ollama",
+        "OpenAI"
       ]
     }
   },
@@ -70,7 +59,7 @@
       "severity": "info",
       "suppressed": false,
       "template_id": "T-INVENTORY-v2",
-      "text": "Found 4 AI solutions across 1 repository (11 files scanned).",
+      "text": "Found 3 AI solutions across 1 repository (11 files scanned).",
       "type": "INVENTORY_TOTAL"
     },
     {
@@ -86,7 +75,7 @@
       "severity": "warning",
       "suppressed": false,
       "template_id": "T-EGRESS-v1",
-      "text": "4 solutions send data to US-based providers (Anthropic (Claude), Azure OpenAI) — verify DPA and data-residency requirements.",
+      "text": "3 solutions send data to US-based providers (Anthropic (Claude), Azure OpenAI) — verify DPA and data-residency requirements.",
       "type": "DATA_EGRESS_REGION"
     },
     {
@@ -94,7 +83,7 @@
       "severity": "info",
       "suppressed": false,
       "template_id": "T-DEP-CONC-v1",
-      "text": "Highest dependency: Anthropic (Claude), used by 2 of 4 solutions (50%).",
+      "text": "Highest dependency: Anthropic (Claude), used by 2 of 3 solutions (67%).",
       "type": "DEPENDENCY_CONCENTRATION"
     }
   ],

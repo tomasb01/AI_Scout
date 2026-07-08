@@ -1,57 +1,6 @@
 {
-  "asset_count": 2,
+  "asset_count": 1,
   "assets": [
-    {
-      "code_contexts": [],
-      "data_flow": {
-        "confidence": "low",
-        "data_categories": [],
-        "sink_count": 0,
-        "sink_providers": [],
-        "sink_types": [],
-        "source_count": 0,
-        "source_types": [],
-        "step_count": 0
-      },
-      "dependencies": [],
-      "discovered_via": [
-        "git_scanner"
-      ],
-      "file_paths": [
-        ".github/workflows/llm-review.yml"
-      ],
-      "name": ".github",
-      "provider": "anthropic",
-      "raw_findings": [
-        {
-          "file_path": ".github/workflows/llm-review.yml",
-          "has_redaction": false,
-          "provider": "anthropic",
-          "type": "config_detected"
-        },
-        {
-          "file_path": ".github/workflows/llm-review.yml",
-          "has_redaction": false,
-          "provider": "anthropic",
-          "type": "config_detected"
-        },
-        {
-          "file_path": ".github/workflows/llm-review.yml",
-          "has_redaction": false,
-          "provider": "huggingface",
-          "type": "config_detected"
-        }
-      ],
-      "repository": "sprint3",
-      "risk_status": "no_findings",
-      "tags": [
-        "local_model"
-      ],
-      "task_types": [
-        "inference"
-      ],
-      "type": "custom_code"
-    },
     {
       "code_contexts": [],
       "data_flow": {
@@ -73,12 +22,31 @@
         "git_scanner"
       ],
       "file_paths": [
+        ".github/workflows/llm-review.yml",
         "llm_config.yaml",
         "requirements.txt"
       ],
-      "name": "Azure OpenAI Integration",
-      "provider": "azure_openai",
+      "name": "sprint3",
+      "provider": "anthropic",
       "raw_findings": [
+        {
+          "file_path": ".github/workflows/llm-review.yml",
+          "has_redaction": false,
+          "provider": "anthropic",
+          "type": "config_detected"
+        },
+        {
+          "file_path": ".github/workflows/llm-review.yml",
+          "has_redaction": false,
+          "provider": "anthropic",
+          "type": "config_detected"
+        },
+        {
+          "file_path": ".github/workflows/llm-review.yml",
+          "has_redaction": false,
+          "provider": "huggingface",
+          "type": "config_detected"
+        },
         {
           "file_path": "llm_config.yaml",
           "has_redaction": false,
@@ -137,7 +105,7 @@
   "files_scanned": 3,
   "insights": [
     {
-      "asset_name": ".github",
+      "asset_name": "sprint3",
       "category": "Workflows & Pipelines",
       "data_involved": [],
       "provider_profile_name": "anthropic",
@@ -146,24 +114,6 @@
         [
           "info",
           "External AI API: Anthropic (Claude)"
-        ]
-      ],
-      "solution_name_set": true,
-      "tech_stack": [
-        "Anthropic (Claude)",
-        "Hugging Face"
-      ]
-    },
-    {
-      "asset_name": "Azure OpenAI Integration",
-      "category": "Other AI Solutions",
-      "data_involved": [],
-      "provider_profile_name": "azure_openai",
-      "recommendation_count": 2,
-      "risk_reasons": [
-        [
-          "info",
-          "External AI API: Azure OpenAI"
         ],
         [
           "warning",
@@ -180,8 +130,10 @@
       ],
       "solution_name_set": true,
       "tech_stack": [
+        "Anthropic (Claude)",
         "Azure OpenAI",
         "ChromaDB",
+        "Hugging Face",
         "LangChain",
         "Ollama",
         "OpenAI"

@@ -360,6 +360,27 @@ Edge-case testy + linter odhalily 3 reálné kompoziční chyby šablon ještě 
 
 ---
 
+## Sprint 0.3 — Agregační hranice + detektor charakteru repa + install (8. července 2026, v0.10.0)
+
+Zadání: Spec v13 §3.4 + QA spec. Cíl: report počítá aplikace, ne adresáře — a čerstvá instalace skutečně funguje za 10 minut.
+
+### Co vzniklo
+
+- **`aiscout/engine/repo_character.py`** — detektor charakteru repa: `production │ tutorial_example │ experiment │ unknown` + confidence + signály z konečného slovníku (sequential_dir_naming, lesson_keyword_dirs, many_small_solution_dirs, notebook_heavy, readme_course_keywords vs. has_ci/tests/container/lockfile). Observable s evidencí, ne verdikt; produkční signály vetují tutorial klasifikaci (dražší chyba). Výsledek v `ScanResult.metadata["repo_character"]`.
+- **`aiscout/engine/aggregation.py`** — agregační hranice: **řešení = aplikace/služba**, directory grouping zůstává mechanismus. Dvě deterministická pravidla: (1) **tutorial collapse** — tutorial repo s ≥ 8 komponentami se složí do jednoho řešení „`<repo>` teaching collection (N examples)" s tagem `tutorial_collection`, všechny findingy si drží file:line evidenci; (2) **manifest roots** — komponenta se složí pod nejbližšího předka s dependency manifestem (odvozeno z findingů, žádný přístup na disk); bez manifestu se nic nemerguje (konzervativní default → ID beze změny).
+- **`AIAsset.component_dirs`** — evidence složených adresářů (aditivní pole).
+- **Výstupy** — HTML: badge „tutorial / example repo" u repa (se signály v tooltipu), štítek „N components" u složených řešení; JSON `schema_version` **1.3.0**: `repositories[].character` + `solutions[].components`.
+- **Re-baseline `sol-` ID** — dle plánu (README_BUNDLE): ID hash root povýšen z adresáře na agregační root; golden snapshoty jednorázově přegenerovány (fixtures 4 → 3 řešení). Finding `f-` ID nedotčena.
+- **Pročištěný install:** nalezena a opravena reálná díra — **wheel neobsahoval žádné šablony** (chybělo `package-data` v pyproject) → `aiscout scan` i `aiscout web` byly na čerstvé (needitovatelné) instalaci rozbité; fungovalo jen `pip install -e .`. Ověřeno buildem + instalací do čistého venv + e2e scanem. README přepsán: Quick Start bez LLM (~2 min), konzistentní default model 7b (dřív README naváděl stáhnout 14b, ale scan zkoušel 7b → pád), doplněny `--org`, `check`, `web`, `--strict`, aktuální architektura; Development sekce opravena (`uv sync` místo nefunkčního `pip install -e ".[dev]"`).
+
+### Výsledky
+
+- **261 testů passing** (+12: detektor, manifest-root folding, sibling manifests, worst-risk merge, tutorial collapse e2e + determinismus, ID stabilita nemergovaných řešení)
+- Nová fixture `tests/fixtures_tutorial/` (10 lesson adresářů + course README) — v reportu **1 řešení místo 10**, I-01 říká „Found 1 AI solution"
+- Enrichment fix: tagy se sjednocují se scannerovými (dřív by keyword derivace zahodila `tutorial_collection`)
+
+---
+
 ## Otevřené body
 
 1. **Report redesign** — implementovat vybranou variantu (nebo mix) jako nový `report.html.j2`
