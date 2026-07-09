@@ -211,3 +211,91 @@ def test_structural_table_groups():
         html = out.read_text()
     assert 'class="grp-row' in html
     assert "01-chapter/" in html
+
+
+def test_json_export_aibom_groundwork():
+    """AIBOM prep (schema 1.4.0): model_refs, per-field provenance and
+    the application/dependency_manifest role on every solution."""
+    import json
+    from aiscout.engine.enrichment import enrich_assets
+    from aiscout.models import CodeContext
+    from aiscout.report.json_export import JSONExporter
+
+    coded = AIAsset(
+        name="bot", provider=ProviderInfo(name="openai"),
+        repository="repo", root_path="bot", file_path="bot/main.py",
+        raw_findings=[
+            Finding(type=FindingType.IMPORT_DETECTED, file_path="bot/main.py",
+                    content="import openai", provider="openai"),
+            Finding(type=FindingType.CONFIG_DETECTED, file_path="bot/config.yaml",
+                    line_number=3, content="config: gpt-4o-mini", provider="openai"),
+        ],
+        code_contexts=[CodeContext(
+            file_path="bot/main.py", language="python",
+            model_names=["gpt-4o", "gpt-4o"],
+        )],
+    )
+    manifest = AIAsset(
+        name="deps", repository="repo", root_path=".",
+        file_path="requirements.txt",
+        raw_findings=[Finding(
+            type=FindingType.DEPENDENCY_DETECTED, file_path="requirements.txt",
+            content="openai>=1.0", provider="openai",
+        )],
+    )
+    scan = _make_scan_result(repo="repo", assets=[coded, manifest])
+
+    with tempfile.TemporaryDirectory() as tmp:
+        out = Path(tmp) / "r.json"
+        JSONExporter([scan], output_path=str(out),
+                     insights=enrich_assets(scan.assets)).generate()
+        data = json.loads(out.read_text())
+
+    assert data["schema_version"] == "1.4.0"
+    by_role = {s["role"]: s for s in data["solutions"]}
+    assert set(by_role) == {"application", "dependency_manifest"}
+
+    app = by_role["application"]
+    refs = {r["model"]: r for r in app["model_refs"]}
+    assert refs["gpt-4o"]["resolution"] == "code"
+    assert refs["gpt-4o"]["evidence"] == ["bot/main.py"]
+    assert refs["gpt-4o-mini"]["resolution"] == "config"
+    assert refs["gpt-4o-mini"]["evidence"] == ["bot/config.yaml"]
+    # deterministic ordering + dedup of repeated literals
+    assert [r["model"] for r in app["model_refs"]] == ["gpt-4o", "gpt-4o-mini"]
+
+    assert app["provenance"] == {
+        "name": "rule", "category": "rule",
+        "summary": "rule", "data_involved": "rule",
+    }
+    assert by_role["dependency_manifest"]["model_refs"] == []
+
+
+def test_json_export_llm_provenance_marked():
+    import json
+    from aiscout.engine.enrichment import enrich_assets
+    from aiscout.report.json_export import JSONExporter
+
+    asset = AIAsset(
+        name="classified", provider=ProviderInfo(name="openai"),
+        repository="repo", root_path="svc", file_path="svc/app.py",
+        raw_findings=[Finding(
+            type=FindingType.IMPORT_DETECTED, file_path="svc/app.py",
+            content="import openai", provider="openai",
+        )],
+        data_classification=ClassificationResult(
+            categories=[DataCategory.PII], confidence=Confidence.HIGH,
+            details="Summarizes customer support emails for agents.",
+        ),
+    )
+    scan = _make_scan_result(repo="repo", assets=[asset])
+    with tempfile.TemporaryDirectory() as tmp:
+        out = Path(tmp) / "r.json"
+        JSONExporter([scan], output_path=str(out),
+                     insights=enrich_assets(scan.assets)).generate()
+        data = json.loads(out.read_text())
+
+    prov = data["solutions"][0]["provenance"]
+    assert prov["summary"] == "llm"
+    assert prov["data_involved"] == "rule+llm"
+    assert prov["name"] == "rule"

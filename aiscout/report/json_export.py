@@ -9,7 +9,7 @@ from pathlib import Path
 
 from aiscout.engine.enrichment import AssetInsight
 from aiscout.knowledge.providers import KB_VERSION
-from aiscout.models import AIAsset, RiskStatus, ScanResult, now_utc
+from aiscout.models import AIAsset, FindingType, RiskStatus, ScanResult, now_utc
 from aiscout.report.qa import QAResult, prepare_qa
 
 
@@ -171,7 +171,12 @@ class JSONExporter:
             # v0.10.0 when the aggregation boundary promoted the ID hash
             # root from directory to aggregation root (accepted one-time
             # break, README_BUNDLE.md).
-            "schema_version": "1.3.0",
+            # 1.4.0 (AIBOM groundwork, mapping spec §2-§3): adds
+            # solutions[].role (application │ dependency_manifest),
+            # solutions[].model_refs (normalized model references with
+            # resolution + evidence) and solutions[].provenance
+            # (rule/llm per derived field).
+            "schema_version": "1.4.0",
             "scout_version": _scout_version(),
             "kb_version": KB_VERSION,
             "mode": "llm_enriched" if any(
@@ -225,6 +230,16 @@ class JSONExporter:
             "components": list(getattr(asset, "component_dirs", [])),
             # where in the repo tree this solution lives ("." = root)
             "path": getattr(asset, "root_path", ""),
+            # AIBOM groundwork (G7 System/Infrastructure clusters): an
+            # application-level solution vs. dependency evidence (a
+            # manifest with no code behind it)
+            "role": (
+                "dependency_manifest"
+                if "dependency_evidence" in asset.tags else "application"
+            ),
+            # AIBOM Models cluster groundwork + Sprint 4 observable
+            # ("collect now, show later"): normalized model references.
+            "model_refs": _model_refs(asset),
         }
 
         if asset.provider:
@@ -236,6 +251,26 @@ class JSONExporter:
         if insight:
             result["category"] = insight.category
             result["summary"] = insight.summary
+            # AIBOM discipline (mapping spec principle 2): every derived
+            # field carries its provenance — rule-based derivation vs.
+            # LLM enrichment. Names and categories are always
+            # deterministic; the summary and data_involved may be
+            # LLM-contributed in LLM mode.
+            llm_summary = bool(
+                asset.data_classification
+                and asset.data_classification.details
+                and insight.summary == asset.data_classification.details
+            )
+            llm_data = bool(
+                asset.data_classification
+                and asset.data_classification.categories
+            )
+            result["provenance"] = {
+                "name": "rule",
+                "category": "rule",
+                "summary": "llm" if llm_summary else "rule",
+                "data_involved": "rule+llm" if llm_data else "rule",
+            }
             result["tech_stack"] = insight.tech_stack
             result["data_involved"] = insight.data_involved
             result["risk_reasons"] = [
@@ -285,6 +320,42 @@ class JSONExporter:
 
 
 # ── Helpers ────────────────────────────────────────────────────────────────
+
+
+def _model_refs(asset: AIAsset) -> list[dict]:
+    """Normalized model references for one solution.
+
+    AIBOM Models-cluster groundwork (mapping spec §3) and the Sprint 4
+    org/cost observable pulled forward — every scan collects these from
+    day one, so pilot scans and diff baselines are never missing them.
+
+    ``resolution`` uses the mapping-spec vocabulary subset derivable
+    today: "code" (literal in source, from CodeContext.model_names) or
+    "config" (YAML/TOML model reference finding). KB enrichment (tier,
+    lifecycle, PURL) arrives additively in Sprints 5/5b.
+    """
+    refs: dict[str, dict] = {}
+    for ctx in asset.code_contexts:
+        for model in ctx.model_names:
+            ref = refs.setdefault(model.lower(), {
+                "model": model, "resolution": "code", "evidence": set(),
+            })
+            ref["evidence"].add(ctx.file_path)
+    for f in asset.raw_findings:
+        if f.type == FindingType.CONFIG_DETECTED and f.content.startswith("config: "):
+            model = f.content[len("config: "):]
+            ref = refs.setdefault(model.lower(), {
+                "model": model, "resolution": "config", "evidence": set(),
+            })
+            ref["evidence"].add(f.file_path)
+    return [
+        {
+            "model": ref["model"],
+            "resolution": ref["resolution"],
+            "evidence": sorted(ref["evidence"]),
+        }
+        for _, ref in sorted(refs.items())
+    ]
 
 
 def _scout_version() -> str:

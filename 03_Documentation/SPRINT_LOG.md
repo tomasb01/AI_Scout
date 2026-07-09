@@ -426,6 +426,18 @@ AI-developer-3: 127 řešení (z 141 dir-assetů; merge jen prokázané varianty
 
 ---
 
+## AIBOM groundwork v JSON exportu (9. července 2026, schema 1.4.0)
+
+Rozhodnutí: malá příprava na AIBOM (Sprint 5b) provedena hned — teplý kontext po refactoru, princip „sbírat teď, zobrazit později" (pilotní scany = budoucí diff baseline; zpětné dosbírání = přescanovat vše) a aditivní schema změna bez rizika. Tvrdá hranice scope: jen 3 pole, žádný PURL/pinning/podpisy (zůstávají v 5b dle plánu).
+
+- `solutions[].model_refs` — normalizované reference modelů: `{model, resolution: code│config, evidence: [soubory]}`. Deduplikováno, deterministické řazení. Plní AIBOM Models cluster (mapping spec §3) **a** Sprint 4 observable zároveň. KB obohacení (tier, lifecycle, PURL) přijde aditivně v 5/5b.
+- `solutions[].provenance` — rule/llm per odvozené pole (name, category, summary, data_involved) — AIBOM zásada č. 2 (`scout:provenance` na každém odvozeném poli).
+- `solutions[].role` — `application` │ `dependency_manifest` — CycloneDX typování komponent připravené (aplikace vs. klasická SBOM library vrstva).
+
+270 testů passing. Ověřeno na Fleurdin_AI: model_refs zachytává `google/gemma-2-2b-it(code)`, `gpt-4o(code)`, `mistralai/Mistral-7B-Instruct-v0.3(code)`.
+
+---
+
 ## Otevřené body
 
 1. **Report redesign** — implementovat vybranou variantu (nebo mix) jako nový `report.html.j2`
