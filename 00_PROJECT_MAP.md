@@ -54,7 +54,7 @@ Detailní stav: `03_Documentation/PROJECT_STATUS.md` · pro AI asistenty: `CLAUD
 | 0.2 | QA vrstva reportu (insighty, linter, fact strip) | QA spec | ✅ **hotový** (v0.9.0) |
 | 0.3 | Agregační hranice + detektor tutorial/produkce + install | QA spec + Spec v13 §3.4 | ✅ **hotový** (v0.10.0) |
 | → | Validační milník: reálná repa + purpose-first refactor identity (v0.11.0) + AIBOM groundwork (schema 1.4.0) | feedback z validace | ✅ hotový (viz SPRINT_LOG) |
-| 1 | SARIF export | Spec v13 §15 | ✅ **hotový** (v0.12.0; zbývá živé ověření v GitHub security tabu) |
+| 1 | SARIF export | Spec v13 §15 | ✅ **hotový** (v0.12.0; živě ověřeno dogfood workflow na AI_Scout repu — Security tab bez warningů) |
 | **2** | **Diff / trend režim** | datamodel spec (finding stavy) | ⏳ **← další na řadě** |
 | 1 | SARIF export | Spec v13 §15 | ⏳ (odemčeno — stabilní ID hotové) |
 | 2 | Diff / trend režim | datamodel spec (finding stavy) | ⏳ |

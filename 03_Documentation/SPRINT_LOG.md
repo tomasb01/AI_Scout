@@ -455,7 +455,7 @@ Cíl: distribuce zadarmo — nálezy tam, kde žijí vývojáři (GitHub code sc
 
 - Výstup **validuje proti oficiálnímu SARIF 2.1.0 JSON schématu** (fixtures i AI-developer-3 — 10 výsledků = 10 uniklých HF klíčů s file:line).
 - 279 testů passing (+8: struktura/GitHub požadavky, redakce zpráv, fingerprinty, discovery flag, multi-repo, determinismus, CLI e2e).
-- Zbývá živé ověření v GitHub security tabu — nasadit workflow z examples (dogfood na AI_Scout repu) nebo na pilotním repu.
+- **Živé ověření hotovo (dogfood, 10. 7. 2026):** workflow `.github/workflows/ai-scout-sarif.yml` nasazen na AI_Scout repo — Action prošla na první pokus, SARIF upload bez warningů, v Security tabu se objevilo přesně 9 očekávaných alertů (falešné klíče v test fixtures, rule SEC-KEY-001, critical severity). Všech 9 zavřeno jako „used in tests" — stabilní fingerprinty drží dismissal napříč scany, tab od teď hlídá jen nové nálezy. **Akceptační kritérium sprintu splněno.** Bonus: Scout od teď trvale skenuje sám sebe při každém pushi/PR + týdně.
 
 ---
 
