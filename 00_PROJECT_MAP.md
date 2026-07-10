@@ -57,11 +57,7 @@ Detailní stav: `03_Documentation/PROJECT_STATUS.md` · pro AI asistenty: `CLAUD
 | 1 | SARIF export | Spec v13 §15 | ✅ **hotový** (v0.12.0; živě ověřeno dogfood workflow na AI_Scout repu — Security tab bez warningů) |
 | 2 | Diff / trend režim | datamodel spec (finding stavy) | ✅ **hotový** (v0.13.0) |
 | 3 | MCP & Agent scanner (launch feature) | Spec v13 §15 | ✅ **hotový** (v0.14.0; validováno živě) |
-| **→** | **Launch: veřejné repo + threat model + pilot outreach** | Spec v13 §17 | ⏳ **← jsme tady** (mimo kód) |
-| 4 | SCM abstrakce + GitLab + org/cost observables | datamodel spec §2–§3 | ⏳ |
-| 1 | SARIF export | Spec v13 §15 | ⏳ (odemčeno — stabilní ID hotové) |
-| 2 | Diff / trend režim | datamodel spec (finding stavy) | ⏳ |
-| 3 | MCP & Agent scanner (launch feature) | Spec v13 §15 | ⏳ |
+| **→** | **Launch: veřejné repo + threat model + pilot outreach** | Spec v13 §17 | ⏳ **← jsme tady** (mimo kód; pilot repo rozhodnuto: AI-developer-3) |
 | 4 | SCM abstrakce + GitLab + org/cost observables | datamodel spec §2–§3 | ⏳ |
 | 5 / 5b | KB Premium Feed / AIBOM export | AIBOM mapping | ⏳ |
 | 6 | Compliance reporting | Spec v13 §15 | ⏳ |
@@ -81,7 +77,7 @@ Paralelně (mimo kód): threat model dokument, veřejné repo+README po Sprintu 
 ```bash
 git checkout main && git pull
 uv sync
-uv run pytest tests/ -q          # očekávej: 261 passed
+uv run pytest tests/ -q          # očekávej: 311 passed
 uv run aiscout scan --local tests/fixtures --no-llm -o report.html   # ukázka výstupu
 uv run aiscout scan --local tests/fixtures_tutorial --no-llm -o t.html  # tutorial collapse demo
 ```
