@@ -74,6 +74,7 @@ Paralelně (mimo kód): threat model dokument, veřejné repo+README po Sprintu 
 2. **Spec v0.14** — zapsat drift do specu (org sken, guardrail, Sprint 0.1, Sprint 0.2 / QA vrstva, 248 testů); podle domluvy připraví strategická konverzace.
 3. ~~Merge větve do `main`~~ — ✅ větev je v main (19591f7).
 4. Netrackované lokální soubory: `01_Prod_specs/[Archive]/v11+v12.docx`, `prototypes/variant_a/b/c.html` — rozhodnout commit vs. ignore.
+5. **Pilot: repo `Global-Classes-CZE/AI-developer-3`** (rozhodnuto 10. 7. 2026). Balíček v lokálním `pilot/` (gitignored): HTML report, JSON baseline pro budoucí diffy, SARIF. ⚠️ Repo obsahuje reálné uniklé HF klíče — rotovat před sdílením reportu.
 
 ## 6. Jak pokračovat v terminálu
 

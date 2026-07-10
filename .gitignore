@@ -42,3 +42,6 @@ htmlcov/
 
 # Claude
 .claude/
+
+# Pilot artifacts (local only — customer data stays out of git)
+pilot/
