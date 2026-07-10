@@ -359,3 +359,25 @@ def test_risk_status_derivation_matches_severity():
     assert _derive_risk_status([RiskReason("warning", "t", "d")]) == RiskStatus.REVIEW
     assert _derive_risk_status([RiskReason("info", "t", "d")]) == RiskStatus.NO_FINDINGS
     assert _derive_risk_status([]) == RiskStatus.NO_FINDINGS
+
+
+def test_uuid_directories_never_leak_into_names():
+    """A dir called fc6ee9b0-5520-... is identifier noise — naming walks
+    up to the nearest meaningful ancestor instead."""
+    from aiscout.engine.enrichment import _get_leaf_dir_name
+    from aiscout.scanners.git_scanner import _clean_dir_name
+    from aiscout.models import AIAsset
+
+    assert _clean_dir_name("fc6ee9b0-5520-4f08-9369-06a5ef75e280") == ""
+    assert _clean_dir_name("deadbeef01") == ""
+    assert _clean_dir_name("20240815123") == ""
+    assert _clean_dir_name("4-RAG_Pipeline") == "RAG Pipeline"
+
+    asset = AIAsset(
+        name="x", repository="r",
+        file_path="agents/fc6ee9b0-5520-4f08-9369-06a5ef75e280/main.py",
+    )
+    assert _get_leaf_dir_name(asset) == "Agents"
+
+    insights = enrich_assets([asset])
+    assert "fc6ee9b0" not in insights[asset.id].solution_name.lower()

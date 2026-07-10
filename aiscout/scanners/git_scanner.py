@@ -1424,8 +1424,23 @@ def _derive_solution_name(file_paths: list[str], provider: str, repo_name: str) 
 
 
 def _clean_dir_name(name: str) -> str:
-    """Convert directory name to human-readable solution name."""
+    """Convert directory name to human-readable solution name.
+
+    Returns "" for identifier noise (UUIDs, hashes, digit-heavy tokens)
+    — a directory called fc6ee9b0-5520-4f08-... must never leak into a
+    display name; callers fall through to their next naming source.
+    """
     import re
+
+    stripped = name.strip("[]").strip()
+    if re.fullmatch(
+        r"[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}",
+        stripped, re.IGNORECASE,
+    ) or re.fullmatch(r"[0-9a-f]{8,}", stripped, re.IGNORECASE):
+        return ""
+    digits = sum(c.isdigit() for c in stripped)
+    if len(stripped) >= 6 and digits / len(stripped) > 0.5:
+        return ""
 
     # Remove common prefixes like "0-", "1-", "5-"
     cleaned = re.sub(r"^\d+[-_.]?\s*", "", name)

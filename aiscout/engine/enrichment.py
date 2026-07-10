@@ -1890,7 +1890,13 @@ def _funcs_to_title(func_names: list[str]) -> str:
 
 
 def _get_leaf_dir_name(asset: AIAsset) -> str:
-    """Get the most specific (leaf) directory name, cleaned up."""
+    """Get the most specific meaningful directory name, cleaned up.
+
+    Walks upward past identifier noise (UUID/hash directories, for
+    which ``_clean_dir_name`` returns "") so a solution living in
+    ``agents/fc6ee9b0-5520-.../`` is named after ``agents``, not after
+    the UUID.
+    """
     if not asset.file_path:
         return ""
     from aiscout.scanners.git_scanner import _clean_dir_name
@@ -1898,9 +1904,12 @@ def _get_leaf_dir_name(asset: AIAsset) -> str:
     parts = first_file.split("/")
     if len(parts) <= 1:
         return ""
-    # Take the last directory (most specific)
-    leaf = parts[-2]
-    return _clean_dir_name(leaf)
+    # Most specific directory first, then its ancestors
+    for segment in reversed(parts[:-1]):
+        cleaned = _clean_dir_name(segment)
+        if cleaned:
+            return cleaned
+    return ""
 
 
 # Generic names that should NOT be used as solution names
