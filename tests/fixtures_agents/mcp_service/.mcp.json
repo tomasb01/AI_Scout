@@ -1,0 +1,7 @@
+{
+  "mcpServers": {
+    "filesystem": {"command": "npx", "args": ["-y", "@modelcontextprotocol/server-filesystem", "/data"]},
+    "github": {"command": "docker", "args": ["run", "ghcr.io/github/github-mcp-server"]},
+    "remote-api": {"url": "https://mcp.example.com/sse", "type": "http"}
+  }
+}

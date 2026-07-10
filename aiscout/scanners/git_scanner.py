@@ -15,6 +15,10 @@ from pathlib import Path
 import git
 
 from aiscout.knowledge.providers import get_provider
+from aiscout.scanners.agent_detect import (
+    AGENT_CONFIG_FILENAMES,
+    detect_agent_findings,
+)
 from aiscout.models import (
     AIAsset,
     AssetType,
@@ -53,6 +57,9 @@ SPECIAL_FILENAMES = {
     "Dockerfile", "Containerfile",
     "docker-compose.yml", "docker-compose.yaml", "compose.yml", "compose.yaml",
     "mcp.json", ".mcp.json", "claude_desktop_config.json",
+    # Sprint 3 — MCP/agent instruction & rules files (not code extensions)
+    "CLAUDE.md", ".cursorrules", ".clinerules", ".windsurfrules",
+    "copilot-instructions.md", ".aider.conf.yml", "AGENTS.md", "GEMINI.md",
 }
 
 SKIP_DIRS = {
@@ -433,14 +440,22 @@ class GitScanner(BaseScanner):
                     )
                     continue
 
-                # ── MCP config files ──
-                if file_path.name in {
-                    "mcp.json", ".mcp.json", "claude_desktop_config.json",
-                }:
-                    all_findings.extend(
-                        self._detect_mcp_config(rel_path, content)
-                    )
-                    continue
+                # ── Sprint 3: MCP servers + agent surfaces ──
+                # Runs for the dedicated config/instruction files AND for
+                # any .json that carries an mcpServers block (a repo can
+                # embed MCP config in a settings.json under .cursor/,
+                # .vscode/, etc.).
+                agent_findings = detect_agent_findings(
+                    rel_path, file_path.name, content
+                )
+                if agent_findings:
+                    all_findings.extend(agent_findings)
+                    # Instruction/config files carry no code to import-scan;
+                    # dedicated MCP/agent config names stop here. A settings
+                    # json that merely embedded mcpServers still falls
+                    # through to the code detectors below.
+                    if file_path.name in AGENT_CONFIG_FILENAMES:
+                        continue
 
                 # ── CI/CD pipelines ──
                 if _looks_like_ci_file(rel_path, file_path.name):
@@ -449,6 +464,11 @@ class GitScanner(BaseScanner):
                     )
                     # Intentionally fall through — a workflow file may also
                     # contain AI imports referenced via `uses:`/`script:`.
+
+                # Instruction files (CLAUDE.md, .cursorrules, …) are not
+                # code — skip the import/key/config code detectors.
+                if file_path.name in AGENT_CONFIG_FILENAMES:
+                    continue
 
                 # Run code detectors
                 all_findings.extend(self._detect_imports(rel_path, content))

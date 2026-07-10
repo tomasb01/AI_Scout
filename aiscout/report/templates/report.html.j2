@@ -158,6 +158,12 @@ footer{text-align:center;color:var(--text-dim);font-size:.65rem;margin-top:2rem;
 .dl-add{color:var(--ok);font-weight:700}.dl-key{color:var(--critical);font-weight:700;font-size:.62rem}
 .dl-path{font-family:'SF Mono','Fira Code',monospace;color:var(--text-dim);font-size:.68rem}
 
+/* Agent autonomy (Sprint 3) */
+.autonomy-tag{display:inline-block;font-size:.58rem;font-weight:700;padding:.05rem .4rem;border-radius:3px;margin-left:.25rem;vertical-align:middle}
+.autonomy-tag.a-tool_calling{background:rgba(99,102,241,0.12);color:var(--accent)}
+.autonomy-tag.a-supervised_agent{background:rgba(245,158,11,0.14);color:var(--warning)}
+.autonomy-tag.a-autonomous_loop{background:rgba(239,68,68,0.14);color:var(--critical)}
+
 /* Finding workflow status */
 .fstatus{display:inline-block;font-size:.55rem;font-weight:700;letter-spacing:.04em;padding:.05rem .35rem;border-radius:3px;margin-left:.35rem;vertical-align:middle;background:rgba(245,158,11,0.12);color:var(--warning)}
 
@@ -548,6 +554,7 @@ footer{text-align:center;color:var(--text-dim);font-size:.65rem;margin-top:2rem;
     {% if asset.tags %}
     <div style="margin-top:.15rem">
       {% for tag in asset.tags %}<span class="task-tag t-{{ tag }}">{{ tag | replace('_',' ') }}</span>{% endfor %}
+      {% if asset.autonomy and asset.autonomy != 'none' %}<span class="autonomy-tag a-{{ asset.autonomy }}" title="Agent autonomy ({{ asset.autonomy_confidence }} confidence){% if asset.agent_frameworks %} · {{ asset.agent_frameworks | join(', ') }}{% endif %}">{{ asset.autonomy | replace('_',' ') }}</span>{% endif %}
     </div>
     {% endif %}
     {% set prose = summary_display.get(asset.id) %}
@@ -659,6 +666,15 @@ footer{text-align:center;color:var(--text-dim);font-size:.65rem;margin-top:2rem;
   </div>
 
   <div>
+    {# Agent (Sprint 3) #}
+    {% if asset.autonomy and asset.autonomy != 'none' %}
+    <div class="detail-section">
+      <h4>Agent</h4>
+      <div class="prov-row"><span class="prov-lbl">Autonomy</span><span class="prov-val"><span class="autonomy-tag a-{{ asset.autonomy }}">{{ asset.autonomy | replace('_',' ') }}</span> <span style="color:var(--text-dim);font-size:.65rem">{{ asset.autonomy_confidence }} confidence</span></span></div>
+      {% if asset.agent_frameworks %}<div class="prov-row"><span class="prov-lbl">Frameworks</span><span class="prov-val">{{ asset.agent_frameworks | join(', ') }}</span></div>{% endif %}
+    </div>
+    {% endif %}
+
     {# Tech Stack #}
     {% if insight and insight.tech_stack %}
     <div class="detail-section">

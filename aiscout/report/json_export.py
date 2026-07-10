@@ -182,7 +182,9 @@ class JSONExporter:
             # 1.5.0 (Sprint 2 diff/trend): adds findings[].status
             # (open │ accepted_risk) + findings[].first_seen, and the
             # top-level "delta" block when the scan ran with --baseline.
-            "schema_version": "1.5.0",
+            # 1.6.0 (Sprint 3 MCP/Agent): adds solutions[].autonomy
+            # (level │ confidence │ frameworks).
+            "schema_version": "1.6.0",
             "scout_version": _scout_version(),
             "kb_version": KB_VERSION,
             "mode": "llm_enriched" if any(
@@ -231,6 +233,12 @@ class JSONExporter:
             "risk_status": asset.risk_status.value,
             "task_types": [t.value for t in getattr(asset, "task_types", [])],
             "tags": list(getattr(asset, "tags", [])),
+            # Sprint 3 — agent autonomy classification (inventory attribute)
+            "autonomy": {
+                "level": getattr(asset, "autonomy", "none"),
+                "confidence": getattr(asset, "autonomy_confidence", "low"),
+                "frameworks": list(getattr(asset, "agent_frameworks", [])),
+            },
             "dependencies": asset.dependencies,
             # Sprint 0.3 aggregation boundary: directories folded into
             # this solution ([] = still a single directory)

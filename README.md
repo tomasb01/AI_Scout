@@ -69,6 +69,9 @@ aiscout scan --local /path/to/repo --no-llm --findings-state .aiscout/findings.j
 # Developer guardrail for pre-commit / CI: fail on leaked keys or sensitive LLM egress
 aiscout check --path .
 
+# Map this machine's live MCP / agent config (Claude Desktop/Code, Cursor, VS Code, Windsurf)
+aiscout mcp
+
 # Web UI (3-step wizard)
 aiscout web --port 8080
 ```
@@ -124,7 +127,7 @@ output:
 | `--baseline` | Previous scan JSON — adds scan delta + SCAN_DELTA insight | — |
 | `--findings-state` | Findings workflow state file (open/accepted_risk persistence) | `.aiscout/findings.json` if present |
 
-Other commands: `aiscout diff <old.json> <new.json> [--fail-on-new-critical]` (scan delta), `aiscout findings accept|reopen|list` (workflow states), `aiscout check --path . [--warn-only]` (guardrail), `aiscout web [--host] [--port]` (wizard UI).
+Other commands: `aiscout diff <old.json> <new.json> [--fail-on-new-critical]` (scan delta), `aiscout findings accept|reopen|list` (workflow states), `aiscout mcp [--path FILE]` (live MCP/agent environment), `aiscout check --path . [--warn-only]` (guardrail), `aiscout web [--host] [--port]` (wizard UI).
 
 ## What It Detects
 
@@ -134,7 +137,9 @@ Other commands: `aiscout diff <old.json> <new.json> [--fail-on-new-critical]` (s
 
 **Dependencies** — AI packages in `requirements.txt`, `pyproject.toml`, `setup.py`, `package.json` — including known-vulnerable versions (offline advisory KB).
 
-**Data flows** — sources → processing → sinks per solution, rule-based, no LLM required. Plus MCP configs, CI/CD pipelines, Docker manifests, local model artifacts.
+**Data flows** — sources → processing → sinks per solution, rule-based, no LLM required. Plus CI/CD pipelines, Docker manifests, local model artifacts.
+
+**MCP & agents** — MCP server configs (`.mcp.json`, `claude_desktop_config.json`) and MCP-as-code (`mcp.server`/`mcp.client`, `@mcp.tool`), agent frameworks (LangGraph, CrewAI, AutoGen, Semantic Kernel, …), agent-instruction files (`CLAUDE.md`, `.cursorrules`), IDE surfaces (`.claude`/`.cursor`/`.aider`). Each agent gets an **autonomy** label: tool-calling │ supervised-agent │ autonomous-loop.
 
 **Repo character** — production / tutorial–example / experiment: teaching repos get a badge, provable same-flow variants merge into variant groups, and the report table folds large repos into collapsible per-directory groups — overview without losing granularity.
 

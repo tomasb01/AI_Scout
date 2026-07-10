@@ -247,6 +247,12 @@ class AIAsset(BaseModel):
     data_flow: DataFlowMap | None = None  # Sprint 5
     task_types: list[TaskType] = []
     tags: list[str] = []
+    # Sprint 3 — agent autonomy classification (tool_calling │
+    # supervised_agent │ autonomous_loop │ none) + confidence, plus the
+    # agent frameworks detected. Inventory observation, not a verdict.
+    autonomy: str = "none"
+    autonomy_confidence: str = "low"
+    agent_frameworks: list[str] = []
     # Sprint 0.3 aggregation boundary: directories folded into this
     # solution (evidence for "solution = application/service"). Empty for
     # solutions that are still a single directory.

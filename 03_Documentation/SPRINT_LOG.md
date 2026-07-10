@@ -479,6 +479,26 @@ Cíl: z one-shot nástroje opakovaně používaný; artefakt do change managemen
 
 ---
 
+## Sprint 3 — MCP & Agent scanner (10. července 2026, v0.14.0) — LAUNCH FEATURE
+
+Cíl: první nástroj na trhu mapující MCP/agent landscape. Kategorii-definující featura.
+
+### Co vzniklo
+
+- **`aiscout/scanners/agent_detect.py`** — MCP/agent surface detekce: MCP server konfigurace (`.mcp.json`, `claude_desktop_config.json`, + `mcpServers` blok vnořený v libovolném settings.json) se stdio/remote rozlišením; agent-instruction soubory (`CLAUDE.md`, `.cursorrules`, `.clinerules`, `copilot-instructions.md`, `AGENTS.md`, …); IDE surface markery (`.claude`/`.cursor`/`.aider`/`.windsurf`); tool definitions (`@tool`, `@mcp.tool`, `tools=[`); agent frameworky (LangGraph, CrewAI, AutoGen, Semantic Kernel, OpenAI Agents SDK, LlamaIndex, PydanticAI, smolagents, Google ADK, Strands).
+- **Klasifikace autonomie** — `tool_calling │ supervised_agent │ autonomous_loop │ none` + confidence. Human-in-the-loop signál (`input()`, `approval`, `interrupt`) **stropuje** autonomii na supervised i při přítomnosti smyčky — konzervativní, nepřestřeluje. Inventurní atribut, ne verdikt (G7 to zvažuje pro příští revizi guidance). Uloženo v `AIAsset.autonomy/autonomy_confidence/agent_frameworks`, zapojeno do enrichmentu.
+- **`aiscout mcp`** (`scanners/mcp_env.py`) — sken živého MCP prostředí stroje: Claude Desktop, Claude Code, Cursor, VS Code, Windsurf (dokumentované cesty per platforma). Read-only, offline, nikdy nespustí server. Redakce: u remote serverů jen host, nikdy query/token. `--path` pro custom config, `-o` JSON.
+- **Výstupy**: autonomy badge v tabulce (barevně dle úrovně) + sekce Agent v detailu (autonomy + frameworks); JSON `schema_version` **1.6.0** — `solutions[].autonomy {level, confidence, frameworks}`.
+
+### Živá validace (kritérium „hotovo když")
+
+- **Vlastní setup:** `aiscout mcp` na dev stroji našel `playwright` MCP server v Claude Code i Claude Desktop configu (2 servery, 3 config soubory).
+- **Cizí prostředí (AI-Agents-2):** autonomy distribuce **19 autonomous_loop / 30 tool_calling / 13 supervised / 41 none**; frameworky LangGraph 15, LangChain Agents 9, AutoGen 1; MCP zachyceno jako kód (desítky `mcp.server`/`mcp.client`/`@mcp.tool` s file:line) — config detekce správně 0, protože repo je kurz *jak psát* MCP servery, ne jejich nasazení. Kalibrace autonomie sedí: Plan-Execute agent high, ReAct agenti medium.
+
+311 testů passing (+17). **Launch trojice SARIF + diff + MCP kompletní** → dle specu §17 následuje veřejné repo + threat model + pilot outreach.
+
+---
+
 ## Otevřené body
 
 1. **Report redesign** — implementovat vybranou variantu (nebo mix) jako nový `report.html.j2`

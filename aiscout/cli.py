@@ -870,6 +870,60 @@ def findings_list(state_file):
 
 
 @cli.command()
+@click.option(
+    "--path", "extra_paths", multiple=True, type=click.Path(),
+    help="Extra MCP config file to include (repeatable)",
+)
+@click.option("--output", "-o", type=click.Path(), help="Write result as JSON")
+def mcp(extra_paths, output):
+    """Scan this machine's live MCP / agent configuration.
+
+    Reads the known agent config locations (Claude Desktop, Claude Code,
+    Cursor, VS Code, Windsurf) and lists the MCP servers wired in.
+    Read-only and offline — never launches a server.
+    """
+    from aiscout.scanners.mcp_env import scan_mcp_environment
+
+    result = scan_mcp_environment(list(extra_paths))
+
+    if not result.servers:
+        console.print(Panel(
+            f"No MCP servers configured.\n"
+            f"[dim]Checked {len(result.configs_checked)} known locations; "
+            f"{len(result.configs_found)} config file(s) present.[/]",
+            title="AI Scout — MCP environment", border_style="blue",
+        ))
+    else:
+        table = Table(title="Configured MCP servers", show_header=True)
+        table.add_column("Server")
+        table.add_column("Source")
+        table.add_column("Transport")
+        table.add_column("Command / Host")
+        for s in result.servers:
+            table.add_row(
+                s.name, s.source,
+                f"[yellow]{s.transport}[/]" if s.transport == "remote"
+                else s.transport,
+                s.command or "—",
+            )
+        console.print(table)
+        remote = sum(1 for s in result.servers if s.transport == "remote")
+        console.print(
+            f"[bold]{len(result.servers)}[/] server(s) across "
+            f"{len(result.configs_found)} config file(s)"
+            + (f" · [yellow]{remote} remote[/]" if remote else "")
+        )
+
+    if output:
+        import json as _json
+        Path(output).write_text(
+            _json.dumps(result.to_dict(), indent=2, ensure_ascii=False) + "\n",
+            encoding="utf-8",
+        )
+        console.print(f"Result written to [blue]{output}[/]")
+
+
+@cli.command()
 @click.option("--host", default="0.0.0.0", help="Host to bind to")
 @click.option("--port", "-p", default=8080, help="Port to run on")
 def web(host, port):

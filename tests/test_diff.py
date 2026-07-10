@@ -273,7 +273,7 @@ def test_cli_scan_with_baseline_emits_delta_and_i09(tmp_path):
     ])
     assert result.exit_code == 0, result.output
     data = json.loads(after.read_text())
-    assert data["schema_version"] == "1.5.0"
+    assert data["schema_version"] == "1.6.0"
     assert data["delta"]["counts"] == {
         "added": 0, "removed": 0, "changed": 0,
         "new_providers": 0, "new_key_findings": 0,

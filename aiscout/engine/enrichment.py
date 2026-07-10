@@ -56,6 +56,15 @@ def enrich_asset(asset: AIAsset) -> AssetInsight:
     asset.task_types = _detect_task_types(asset)
     asset.tags = sorted(set(asset.tags) | set(_derive_tags(asset)))
 
+    # Sprint 3 — agent autonomy + framework inventory (after tags, which
+    # the classifier consults).
+    from aiscout.scanners.agent_detect import (
+        classify_autonomy,
+        frameworks_for_asset,
+    )
+    asset.autonomy, asset.autonomy_confidence = classify_autonomy(asset)
+    asset.agent_frameworks = frameworks_for_asset(asset)
+
     summary = _build_summary(asset, provider)
     risk_reasons = _build_risk_reasons(asset, provider)
     recommendations = _build_recommendations(asset, provider, risk_reasons)
