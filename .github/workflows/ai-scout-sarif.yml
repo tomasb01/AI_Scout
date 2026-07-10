@@ -1,0 +1,41 @@
+# AI Scout scans itself (dogfood) and uploads findings to code scanning.
+#
+# The 9 expected alerts are deliberately planted fake keys in test
+# fixtures (detector test data) — dismissed once in the Security tab as
+# "used in tests"; stable finding fingerprints keep them dismissed
+# across scans. Any NEW alert is a real problem.
+#
+# Generic template for other repositories: examples/ai-scout-sarif.yml
+
+name: AI Scout SARIF
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  schedule:
+    - cron: "0 6 * * 1"   # weekly Monday scan
+
+permissions:
+  contents: read
+  security-events: write   # required by upload-sarif
+
+jobs:
+  ai-scout:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: astral-sh/setup-uv@v5
+
+      - name: Run AI Scout on this checkout (rule-based, no LLM, no network)
+        run: |
+          uv sync --frozen --no-dev
+          uv run aiscout scan --local . --no-llm --output aiscout.sarif
+
+      - name: Upload SARIF to code scanning
+        uses: github/codeql-action/upload-sarif@v3
+        with:
+          sarif_file: aiscout.sarif
+          category: ai-scout
