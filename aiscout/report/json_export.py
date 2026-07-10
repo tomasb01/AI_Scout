@@ -21,10 +21,12 @@ class JSONExporter:
         scan_results: list[ScanResult],
         output_path: str = "aiscout_report.json",
         insights: dict[str, AssetInsight] | None = None,
+        delta=None,  # Sprint 2: engine.diff.ScanDelta from --baseline
     ):
         self.scan_results = scan_results
         self.output_path = output_path
         self.insights = insights or {}
+        self.delta = delta
         # Filled by _build_data — the CLI reads counts for --strict.
         self.qa_result: QAResult | None = None
 
@@ -157,6 +159,7 @@ class JSONExporter:
             repos=len(repos),
             files_scanned=total_files,
             overlap_group_sizes=[o["count"] for o in overlaps],
+            delta=self.delta.insight_values() if self.delta else None,
         )
 
         return {
@@ -176,7 +179,10 @@ class JSONExporter:
             # solutions[].model_refs (normalized model references with
             # resolution + evidence) and solutions[].provenance
             # (rule/llm per derived field).
-            "schema_version": "1.4.0",
+            # 1.5.0 (Sprint 2 diff/trend): adds findings[].status
+            # (open │ accepted_risk) + findings[].first_seen, and the
+            # top-level "delta" block when the scan ran with --baseline.
+            "schema_version": "1.5.0",
             "scout_version": _scout_version(),
             "kb_version": KB_VERSION,
             "mode": "llm_enriched" if any(
@@ -203,6 +209,7 @@ class JSONExporter:
             "authors": dict(sorted(author_counts.items(), key=lambda x: -x[1])),
             "insights": [i.to_dict() for i in self.qa_result.insights],
             "qa": self.qa_result.counts(),
+            "delta": self.delta.to_dict() if self.delta else None,
             "overlaps": overlaps,
             "solutions": solutions,
             "errors": all_errors,
@@ -301,6 +308,9 @@ class JSONExporter:
                 "line_number": f.line_number,
                 "content": f.redacted_content if f.redacted_content else f.content,
                 "provider": f.provider,
+                # Sprint 2 workflow state + trend tracking
+                "status": getattr(f, "status", "open"),
+                "first_seen": getattr(f, "first_seen", ""),
             }
             for f in asset.raw_findings
         ]

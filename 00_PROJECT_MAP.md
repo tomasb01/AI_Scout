@@ -3,7 +3,7 @@
 > Jeden dokument, který říká, co je kde, co je zdroj pravdy, co je hotové a co dělat dál.
 > Aktualizuj při merge každého sprintu.
 
-**Stav: v0.12.0 · větev `main` · 279 testů · dokončen Sprint 1 (SARIF export); předtím purpose-first refactor identity (v0.11.0) + AIBOM groundwork (JSON schema 1.4.0)**
+**Stav: v0.13.0 · větev `main` · 294 testů · dokončen Sprint 2 (diff/trend: `aiscout diff`, `--baseline`, finding stavy open/accepted_risk/resolved)**
 
 ---
 
@@ -55,7 +55,8 @@ Detailní stav: `03_Documentation/PROJECT_STATUS.md` · pro AI asistenty: `CLAUD
 | 0.3 | Agregační hranice + detektor tutorial/produkce + install | QA spec + Spec v13 §3.4 | ✅ **hotový** (v0.10.0) |
 | → | Validační milník: reálná repa + purpose-first refactor identity (v0.11.0) + AIBOM groundwork (schema 1.4.0) | feedback z validace | ✅ hotový (viz SPRINT_LOG) |
 | 1 | SARIF export | Spec v13 §15 | ✅ **hotový** (v0.12.0; živě ověřeno dogfood workflow na AI_Scout repu — Security tab bez warningů) |
-| **2** | **Diff / trend režim** | datamodel spec (finding stavy) | ⏳ **← další na řadě** |
+| 2 | Diff / trend režim | datamodel spec (finding stavy) | ✅ **hotový** (v0.13.0) |
+| **3** | **MCP & Agent scanner (launch feature)** | Spec v13 §15 | ⏳ **← další na řadě** |
 | 1 | SARIF export | Spec v13 §15 | ⏳ (odemčeno — stabilní ID hotové) |
 | 2 | Diff / trend režim | datamodel spec (finding stavy) | ⏳ |
 | 3 | MCP & Agent scanner (launch feature) | Spec v13 §15 | ⏳ |
@@ -82,4 +83,4 @@ uv run aiscout scan --local tests/fixtures --no-llm -o report.html   # ukázka v
 uv run aiscout scan --local tests/fixtures_tutorial --no-llm -o t.html  # tutorial collapse demo
 ```
 
-Validační milník proběhl (8. 7. 2026, 3 reálná repa, 258 → 12 řešení — detail v SPRINT_LOG). Další práce = **Sprint 1: SARIF export** (findings → SARIF 2.1.0, fingerprint ze stabilních ID, zobrazení v GitHub/GitLab security tabech). Paralelně: threat model dokument + veřejné repo/README (kvalita reportu je po Sprintu 0 obhajitelná).
+Další práce = **Sprint 3: MCP & Agent scanner** (launch feature, první na trhu): detekce MCP server konfigurací (`claude_desktop_config.json` a ekvivalenty), `.claude`/`.cursor`/`.aider` adresářů, tool definitions, agent frameworků; klasifikace autonomie tool-calling │ řízený agent │ autonomní smyčka; integrace scan → report → JSON s file:line evidencí. Hotovo když: validace na živém MCP prostředí (vlastní setup + aspoň jeden cizí). Paralelně: threat model dokument + veřejné repo/README.

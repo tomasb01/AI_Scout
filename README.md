@@ -56,6 +56,16 @@ aiscout scan --local /path/to/repo --no-llm --output report.json
 # (security findings only by default; add --sarif-include-discovery for inventory)
 aiscout scan --local . --no-llm --output aiscout.sarif
 
+# What changed since the last audit — diff two scan exports (stable IDs)
+aiscout diff last_month.json today.json --fail-on-new-critical
+
+# Scan with a baseline: the report gains a delta box + SCAN_DELTA insight
+aiscout scan --local /path/to/repo --no-llm --baseline last_month.json --output report.html
+
+# Finding workflow: accept a documented risk — persists across scans
+aiscout findings accept f-8c41a2b371d0 --note "demo key, rotated quarterly"
+aiscout scan --local /path/to/repo --no-llm --findings-state .aiscout/findings.json --output report.html
+
 # Developer guardrail for pre-commit / CI: fail on leaked keys or sensitive LLM egress
 aiscout check --path .
 
@@ -111,8 +121,10 @@ output:
 | `--no-llm` | Skip LLM classification | off |
 | `--strict` | CI mode: non-zero exit if the report QA linter suppressed anything | off |
 | `--sarif-include-discovery` | SARIF only: also emit discovery findings as notes | off |
+| `--baseline` | Previous scan JSON — adds scan delta + SCAN_DELTA insight | — |
+| `--findings-state` | Findings workflow state file (open/accepted_risk persistence) | `.aiscout/findings.json` if present |
 
-Other commands: `aiscout check --path . [--warn-only]` (guardrail), `aiscout web [--host] [--port]` (wizard UI).
+Other commands: `aiscout diff <old.json> <new.json> [--fail-on-new-critical]` (scan delta), `aiscout findings accept|reopen|list` (workflow states), `aiscout check --path . [--warn-only]` (guardrail), `aiscout web [--host] [--port]` (wizard UI).
 
 ## What It Detects
 

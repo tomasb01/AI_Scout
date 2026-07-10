@@ -145,6 +145,22 @@ footer{text-align:center;color:var(--text-dim);font-size:.65rem;margin-top:2rem;
 .grp-meta .badge{margin-left:.35rem}
 .grp-repo{float:right;font-size:.68rem;color:var(--text-dim)}
 
+/* Scan delta (--baseline) */
+.delta-box{background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:1.2rem 1.5rem;margin-bottom:1.5rem}
+.delta-box h2{font-size:.95rem;font-weight:700;margin-bottom:.8rem;display:flex;align-items:center;gap:.5rem}
+.delta-box h2::before{content:"";display:inline-block;width:4px;height:16px;background:var(--warning);border-radius:2px}
+.delta-tiles{display:flex;flex-wrap:wrap;gap:.6rem;margin-bottom:.6rem}
+.d-tile{background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:.6rem 1rem;min-width:88px;text-align:center}
+.d-tile .v{font-size:1.15rem;font-weight:700}.d-tile .l{font-size:.62rem;color:var(--text-dim);text-transform:uppercase}
+.d-tile.d-crit .v{color:var(--critical)}.d-tile.d-ok .v{color:var(--ok)}
+.delta-lists{font-size:.75rem}
+.dl-row{padding:.15rem 0;border-bottom:1px solid var(--border);color:var(--text-muted)}
+.dl-add{color:var(--ok);font-weight:700}.dl-key{color:var(--critical);font-weight:700;font-size:.62rem}
+.dl-path{font-family:'SF Mono','Fira Code',monospace;color:var(--text-dim);font-size:.68rem}
+
+/* Finding workflow status */
+.fstatus{display:inline-block;font-size:.55rem;font-weight:700;letter-spacing:.04em;padding:.05rem .35rem;border-radius:3px;margin-left:.35rem;vertical-align:middle;background:rgba(245,158,11,0.12);color:var(--warning)}
+
 /* QA appendix */
 .qa-appendix{margin-top:1.2rem}
 .qa-appendix summary{list-style:none;cursor:pointer;font-size:.7rem;color:var(--text-dim)}
@@ -314,6 +330,27 @@ footer{text-align:center;color:var(--text-dim);font-size:.65rem;margin-top:2rem;
     <li class="ei-{{ ins.severity }}"><span class="ei-dot"></span>{{ ins.text }}</li>
     {% endfor %}
   </ul>
+</div>
+{% endif %}
+
+{# ═══ SCAN DELTA (--baseline) ═══ #}
+{% if delta %}
+<div class="delta-box">
+  <h2>Changes since {{ delta.baseline_generated_at[:10] }}</h2>
+  <div class="delta-tiles">
+    <div class="d-tile"><div class="v">+{{ delta.counts.added }}</div><div class="l">added</div></div>
+    <div class="d-tile"><div class="v">−{{ delta.counts.removed }}</div><div class="l">removed</div></div>
+    <div class="d-tile"><div class="v">{{ delta.counts.changed }}</div><div class="l">changed</div></div>
+    <div class="d-tile {% if delta.counts.new_key_findings %}d-crit{% endif %}"><div class="v">{{ delta.counts.new_key_findings }}</div><div class="l">new keys</div></div>
+    <div class="d-tile {% if delta.counts.resolved_key_findings %}d-ok{% endif %}"><div class="v">{{ delta.counts.resolved_key_findings }}</div><div class="l">keys resolved</div></div>
+    <div class="d-tile"><div class="v">{{ delta.counts.new_providers }}</div><div class="l">new providers</div></div>
+  </div>
+  {% if delta.added_solutions or delta.new_key_findings %}
+  <div class="delta-lists">
+    {% for s in delta.added_solutions[:6] %}<div class="dl-row"><span class="dl-add">+</span> {{ s.name }} <span class="dl-path">{{ s.repository }}:{{ s.path }}</span></div>{% endfor %}
+    {% for f in delta.new_key_findings[:6] %}<div class="dl-row"><span class="dl-key">NEW KEY</span> <span class="dl-path">{{ f.file_path }}{% if f.line_number %}:{{ f.line_number }}{% endif %}</span> in {{ f.solution }}</div>{% endfor %}
+  </div>
+  {% endif %}
 </div>
 {% endif %}
 
@@ -658,7 +695,7 @@ footer{text-align:center;color:var(--text-dim);font-size:.65rem;margin-top:2rem;
       {% for f in asset.raw_findings[:8] %}
       <div class="finding">
         <span class="ft {% if f.type == FindingType.IMPORT_DETECTED %}f-import{% elif f.type == FindingType.API_KEY_DETECTED %}f-api_key{% else %}f-dependency{% endif %}">{{ f.type.value | replace('_', ' ') }}</span>
-        {{ f.file_path }}{% if f.line_number %}:{{ f.line_number }}{% endif %} — {% if f.type == FindingType.API_KEY_DETECTED %}{{ f.redacted_content or '<redacted>' }}{% else %}{{ f.redacted_content if f.redacted_content else f.content }}{% endif %}
+        {{ f.file_path }}{% if f.line_number %}:{{ f.line_number }}{% endif %} — {% if f.type == FindingType.API_KEY_DETECTED %}{{ f.redacted_content or '<redacted>' }}{% else %}{{ f.redacted_content if f.redacted_content else f.content }}{% endif %}{% if f.status == 'accepted_risk' %}<span class="fstatus" title="Accepted risk — documented decision (aiscout findings)">ACCEPTED</span>{% endif %}
       </div>
       {% endfor %}
       {% if asset.raw_findings | length > 8 %}

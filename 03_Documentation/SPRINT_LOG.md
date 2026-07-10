@@ -459,6 +459,26 @@ Cíl: distribuce zadarmo — nálezy tam, kde žijí vývojáři (GitHub code sc
 
 ---
 
+## Sprint 2 — Diff / trend režim (10. července 2026, v0.13.0)
+
+Cíl: z one-shot nástroje opakovaně používaný; artefakt do change managementu. Stojí na stabilních ID ze Sprintu 0.1 — a ta drží: **diff dvou nezávislých scanů AI-developer-3 (127 řešení) = nulový drift.**
+
+### Co vzniklo
+
+- **`aiscout diff <old.json> <new.json>`** (`engine/diff.py`) — porovnání dvou exportů přes `sol-`/`f-` ID: řešení added/removed/changed (risk_status, findingy, model_refs, provider), noví provideři, nové/vyřešené klíče. `--output delta.json`, `--fail-on-new-critical` (exit 3) jako CI gate. Dependency evidence mimo počty (konzistentně). `resolved` = automatické pozorování (nález už není detekován), ne verdikt.
+- **`aiscout scan --baseline old.json`** — report dostane **delta box** (dlaždice added/removed/changed/new keys/resolved keys/new providers + seznamy) a **insight I-09 SCAN_DELTA** v exec summary (šablona čekala připravená od Sprintu 0.2 — teď dostala živá data). JSON: top-level `delta` blok.
+- **Finding workflow stavy** (`engine/findings_state.py`): `open │ accepted_risk │ resolved`, persistence v lokálním souboru `.aiscout/findings.json` (žádný server — self-hosted disciplína). CLI: `aiscout findings accept <id> --note`, `reopen`, `list`. Scan stavy razítkuje před enrichmentem: **accepted klíč přestává řídit critical status** (řešení → review, I-02 počítá jen open), ale zůstává viditelný — badge ACCEPTED v reportu + warning reason s audit stopou. K tomu automatický `first_seen` tracking („tenhle klíč tu je už 2 scany").
+- JSON `schema_version` **1.5.0** (aditivně): `findings[].status`, `findings[].first_seen`, top-level `delta`.
+
+### Akceptační kritéria (dev plan)
+
+- ✅ Dva scany téže org → korektní delta report (reálné repo: 0 driftu při identickém stavu; fixtures: +10 při přidání tutorial stromu; risk_status/model_refs/finding změny detekovány)
+- ✅ `accepted_risk` přežívá mezi scany (nový proces, nový scan, stejná stabilní ID → status drží, first_seen se nerazítkuje znovu)
+
+294 testů passing (+15).
+
+---
+
 ## Otevřené body
 
 1. **Report redesign** — implementovat vybranou variantu (nebo mix) jako nový `report.html.j2`

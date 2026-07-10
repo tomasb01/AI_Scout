@@ -251,7 +251,7 @@ def test_json_export_aibom_groundwork():
                      insights=enrich_assets(scan.assets)).generate()
         data = json.loads(out.read_text())
 
-    assert data["schema_version"] == "1.4.0"
+    assert data["schema_version"] == "1.5.0"
     by_role = {s["role"]: s for s in data["solutions"]}
     assert set(by_role) == {"application", "dependency_manifest"}
 

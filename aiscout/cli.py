@@ -96,11 +96,26 @@ def cli():
          "dependencies, configs) as note-level results. Default exports "
          "security findings only, so the security tab stays signal.",
 )
+@click.option(
+    "--baseline",
+    type=click.Path(exists=True),
+    help="Previous scan JSON export — the report gains a scan delta "
+         "(new/removed/changed solutions) and the SCAN_DELTA insight.",
+)
+@click.option(
+    "--findings-state",
+    "findings_state_path",
+    type=click.Path(),
+    help="Findings workflow state file (open/accepted_risk persistence "
+         "across scans). Created/updated by the scan; manage entries "
+         "with 'aiscout findings'. Default: .aiscout/findings.json "
+         "when it exists.",
+)
 def scan(
     repo, local, org, config, token, branch,
     include_archived, include_forks, max_repos, output,
     llm_url, llm_model, llm_mode, llm_key, no_llm, manifests_only, strict,
-    sarif_include_discovery,
+    sarif_include_discovery, baseline, findings_state_path,
 ):
     """Scan Git repositories for AI assets."""
     # Build list of repos to scan
@@ -232,12 +247,45 @@ def scan(
     # Enrich assets with insights (summary, risk reasoning, recommendations)
     if not all_assets:
         all_assets = [a for r in scan_results for a in r.assets]
+
+    # ── Sprint 2: findings workflow state (before enrichment, so risk
+    # derivation respects accepted_risk) ──
+    from aiscout.engine.findings_state import DEFAULT_STATE_PATH, FindingsState
+    state = None
+    state_path = findings_state_path or (
+        DEFAULT_STATE_PATH if Path(DEFAULT_STATE_PATH).exists() else None
+    )
+    if state_path:
+        state = FindingsState.load(state_path)
+        state_counts = state.apply_to_assets(all_assets)
+        state.save()
+        if state_counts["accepted_risk"]:
+            console.print(
+                f"[dim]Findings state:[/] {state_counts['accepted_risk']} "
+                f"finding(s) carried as accepted_risk from {state.path}"
+            )
+
     insights = enrich_assets(all_assets)
+
+    # ── Sprint 2: scan delta against a baseline export ──
+    delta = None
+    if baseline:
+        from aiscout.engine.diff import diff_exports, load_export
+        from aiscout.report.json_export import JSONExporter as _JX
+        current_data = _JX(scan_results, insights=insights)._build_data()
+        delta = diff_exports(load_export(baseline), current_data)
+        c = delta.counts()
+        console.print(
+            f"[dim]Baseline delta:[/] +{c['added']} / −{c['removed']} solutions, "
+            f"{c['changed']} changed, {c['new_key_findings']} new key finding(s)"
+        )
 
     # Generate report — auto-detect format from extension
     if output.endswith(".json"):
         from aiscout.report.json_export import JSONExporter
-        gen = JSONExporter(scan_results, output_path=output, insights=insights)
+        gen = JSONExporter(
+            scan_results, output_path=output, insights=insights, delta=delta,
+        )
     elif output.endswith(".sarif"):
         from aiscout.report.sarif_export import SarifExporter
         gen = SarifExporter(
@@ -247,7 +295,7 @@ def scan(
     else:
         gen = ReportGenerator(
             scan_results, output_path=output, insights=insights,
-            org_inventory=org_inventory,
+            org_inventory=org_inventory, delta=delta,
         )
     report_path = gen.generate()
 
@@ -683,6 +731,142 @@ def _print_guardrail(key_issues: list[dict], egress_issues: list[dict]) -> None:
         title="AI Scout — guardrail FAILED",
         border_style="red",
     ))
+
+
+@cli.command()
+@click.argument("old_export", type=click.Path(exists=True))
+@click.argument("new_export", type=click.Path(exists=True))
+@click.option("--output", "-o", type=click.Path(), help="Write the delta as JSON")
+@click.option(
+    "--fail-on-new-critical",
+    is_flag=True,
+    help="CI gate: exit 3 when the new scan introduces key findings or "
+         "critical solutions absent from the baseline",
+)
+def diff(old_export, new_export, output, fail_on_new_critical):
+    """Compare two scan JSON exports — what changed since the last audit.
+
+    Built on the stable solution/finding IDs: OLD_EXPORT is the
+    baseline, NEW_EXPORT the current scan. 'Resolved' means the finding
+    is no longer detected (an observation, not a verdict).
+    """
+    from aiscout.engine.diff import diff_files
+
+    try:
+        delta = diff_files(old_export, new_export)
+    except (ValueError, KeyError, OSError) as e:
+        console.print(f"[red]Error:[/] {e}")
+        sys.exit(1)
+
+    c = delta.counts()
+    table = Table(title="Scan delta", show_header=True)
+    table.add_column("Change")
+    table.add_column("Count", justify="right")
+    table.add_row("Solutions added", f"+{c['added']}")
+    table.add_row("Solutions removed", f"−{c['removed']}")
+    table.add_row("Solutions changed", str(c["changed"]))
+    table.add_row("New providers", str(c["new_providers"]))
+    table.add_row("New hardcoded keys", f"[red]{c['new_key_findings']}[/]"
+                  if c["new_key_findings"] else "0")
+    table.add_row("Resolved key findings", f"[green]{c['resolved_key_findings']}[/]"
+                  if c["resolved_key_findings"] else "0")
+    console.print(table)
+
+    for s in delta.added_solutions[:10]:
+        console.print(f"  [green]+[/] {s['name']} ({s['repository']}:{s['path']})")
+    for s in delta.removed_solutions[:10]:
+        console.print(f"  [red]−[/] {s['name']} ({s['repository']}:{s['path']})")
+    for f in delta.new_key_findings[:10]:
+        console.print(
+            f"  [bold red]NEW KEY[/] {f['file_path']}:{f['line_number']} "
+            f"({f['provider']}) in '{f['solution']}'"
+        )
+
+    if output:
+        import json as _json
+        Path(output).write_text(
+            _json.dumps(delta.to_dict(), indent=2, ensure_ascii=False) + "\n",
+            encoding="utf-8",
+        )
+        console.print(f"Delta written to [blue]{output}[/]")
+
+    new_criticals = c["new_key_findings"] + sum(
+        1 for s in delta.added_solutions if s["risk_status"] == "critical"
+    )
+    if fail_on_new_critical and new_criticals:
+        console.print(
+            f"[red]--fail-on-new-critical:[/] {new_criticals} new critical item(s)."
+        )
+        sys.exit(3)
+
+
+@cli.group()
+def findings():
+    """Manage finding workflow states (open │ accepted_risk)."""
+
+
+@findings.command("accept")
+@click.argument("finding_id")
+@click.option("--note", default="", help="Audit note — why is this risk accepted")
+@click.option(
+    "--state-file", default=None, type=click.Path(),
+    help="Findings state file (default: .aiscout/findings.json)",
+)
+def findings_accept(finding_id, note, state_file):
+    """Mark FINDING_ID as accepted risk — persists across scans."""
+    from aiscout.engine.findings_state import DEFAULT_STATE_PATH, FindingsState
+
+    state = FindingsState.load(state_file or DEFAULT_STATE_PATH)
+    state.accept(finding_id, note=note)
+    path = state.save()
+    console.print(
+        f"[yellow]accepted_risk[/] {finding_id}"
+        + (f" — {note}" if note else "")
+        + f"  [dim]({path})[/]"
+    )
+
+
+@findings.command("reopen")
+@click.argument("finding_id")
+@click.option(
+    "--state-file", default=None, type=click.Path(),
+    help="Findings state file (default: .aiscout/findings.json)",
+)
+def findings_reopen(finding_id, state_file):
+    """Return FINDING_ID to the open state."""
+    from aiscout.engine.findings_state import DEFAULT_STATE_PATH, FindingsState
+
+    state = FindingsState.load(state_file or DEFAULT_STATE_PATH)
+    state.reopen(finding_id)
+    path = state.save()
+    console.print(f"[green]open[/] {finding_id}  [dim]({path})[/]")
+
+
+@findings.command("list")
+@click.option(
+    "--state-file", default=None, type=click.Path(),
+    help="Findings state file (default: .aiscout/findings.json)",
+)
+def findings_list(state_file):
+    """List findings tracked in the state file."""
+    from aiscout.engine.findings_state import DEFAULT_STATE_PATH, FindingsState
+
+    state = FindingsState.load(state_file or DEFAULT_STATE_PATH)
+    if not state.entries:
+        console.print(f"[dim]No tracked findings in {state.path}[/]")
+        return
+    table = Table(show_header=True)
+    table.add_column("Finding")
+    table.add_column("Status")
+    table.add_column("First seen")
+    table.add_column("Note")
+    for fid in sorted(state.entries):
+        e = state.entries[fid]
+        table.add_row(
+            fid, e.get("status", "open"),
+            (e.get("first_seen") or "")[:10], e.get("note", ""),
+        )
+    console.print(table)
 
 
 @cli.command()

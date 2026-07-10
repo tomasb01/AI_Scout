@@ -148,6 +148,11 @@ class Finding(BaseModel):
     content: str
     redacted_content: str | None = None
     provider: str = ""
+    # Sprint 2 workflow state (open │ accepted_risk; resolved is an
+    # automatic diff observation) + first-seen tracking. Stamped from
+    # the local findings-state store when the scan uses one.
+    status: str = "open"
+    first_seen: str = ""
 
 
 # ── Data Flow models (Sprint 5) ───────────────────────────────────────────

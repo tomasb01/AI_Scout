@@ -35,11 +35,13 @@ class ReportGenerator:
         output_path: str = "aiscout_report.html",
         insights: dict[str, AssetInsight] | None = None,
         org_inventory: list[dict] | None = None,
+        delta=None,  # Sprint 2: engine.diff.ScanDelta from --baseline
     ):
         self.scan_results = scan_results
         self.output_path = output_path
         self.insights = insights
         self.org_inventory = org_inventory or []
+        self.delta = delta
         # Filled by _build_context — the CLI reads counts for --strict.
         self.qa_result: QAResult | None = None
         self._env = Environment(
@@ -181,6 +183,7 @@ class ReportGenerator:
             repos=len(repos),
             files_scanned=total_files_scanned,
             overlap_group_sizes=[o["count"] for o in overlaps],
+            delta=self.delta.insight_values() if self.delta else None,
         )
 
         # New stats
@@ -218,6 +221,7 @@ class ReportGenerator:
             "recommendations_display": self.qa_result.recommendations_display,
             "qa_counts": self.qa_result.counts(),
             "qa_issues": self.qa_result.qa_report.issues,
+            "delta": self.delta.to_dict() if self.delta else None,
             "FindingType": FindingType,
             "data_egress": data_egress_sorted,
             "all_authors": all_authors,

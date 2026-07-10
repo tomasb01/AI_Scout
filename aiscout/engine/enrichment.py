@@ -1037,8 +1037,18 @@ def _build_risk_reasons(
     """
     reasons: list[RiskReason] = []
 
+    # Sprint 2: findings the security team marked accepted_risk stop
+    # driving the critical status — they stay visible with a badge and
+    # a warning-level reason (audit trail, not deletion).
     key_findings = [
-        f for f in asset.raw_findings if f.type == FindingType.API_KEY_DETECTED
+        f for f in asset.raw_findings
+        if f.type == FindingType.API_KEY_DETECTED
+        and getattr(f, "status", "open") != "accepted_risk"
+    ]
+    accepted_keys = [
+        f for f in asset.raw_findings
+        if f.type == FindingType.API_KEY_DETECTED
+        and getattr(f, "status", "open") == "accepted_risk"
     ]
     processes_pii = _asset_processes_pii(asset)
     is_free_tier_risk = (
@@ -1057,6 +1067,18 @@ def _build_risk_reasons(
                 f"directly in code ({', '.join(files)}). Anyone with repository "
                 "access can extract and misuse these keys. Rotate immediately and "
                 "move to an environment variable or secret manager."
+            ),
+        ))
+
+    if accepted_keys:
+        reasons.append(RiskReason(
+            severity="warning",
+            title="Hardcoded API key accepted as risk",
+            detail=(
+                f"{len(accepted_keys)} hardcoded key finding"
+                f"{'s' if len(accepted_keys) > 1 else ''} marked accepted_risk "
+                "in the findings state — documented decision, kept visible "
+                "for audit. Re-open with 'aiscout findings reopen <id>'."
             ),
         ))
 
