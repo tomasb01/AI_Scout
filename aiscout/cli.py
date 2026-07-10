@@ -89,10 +89,18 @@ def cli():
     help="CI mode: exit non-zero when the report QA linter suppressed "
          "any sentence (production default is degrade, not fail)",
 )
+@click.option(
+    "--sarif-include-discovery",
+    is_flag=True,
+    help="SARIF output only: also emit discovery findings (imports, "
+         "dependencies, configs) as note-level results. Default exports "
+         "security findings only, so the security tab stays signal.",
+)
 def scan(
     repo, local, org, config, token, branch,
     include_archived, include_forks, max_repos, output,
     llm_url, llm_model, llm_mode, llm_key, no_llm, manifests_only, strict,
+    sarif_include_discovery,
 ):
     """Scan Git repositories for AI assets."""
     # Build list of repos to scan
@@ -230,6 +238,12 @@ def scan(
     if output.endswith(".json"):
         from aiscout.report.json_export import JSONExporter
         gen = JSONExporter(scan_results, output_path=output, insights=insights)
+    elif output.endswith(".sarif"):
+        from aiscout.report.sarif_export import SarifExporter
+        gen = SarifExporter(
+            scan_results, output_path=output, insights=insights,
+            include_discovery=sarif_include_discovery,
+        )
     else:
         gen = ReportGenerator(
             scan_results, output_path=output, insights=insights,

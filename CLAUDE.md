@@ -3,7 +3,7 @@
 Enterprise AI Discovery & Security Assessment Tool.
 Self-hosted, open-source (BSL), CLI + Web UI.
 
-**Current status: v0.10.0** — functional end-to-end product, 5 sprints + Sprint 0 complete (0.1 stable IDs & risk status · 0.2 report QA layer · 0.3 aggregation boundary, repo character detector, install fixes), 261 tests passing.
+**Current status: v0.12.0** — functional end-to-end product. Sprint 0 complete (stable IDs & risk status · report QA layer · aggregation boundary + repo character + install fixes), purpose-first identity refactor (aggregation after analysis, flow-fingerprint variant merging, dependency evidence), AIBOM groundwork (JSON schema 1.4.0: model_refs, provenance, role), Sprint 1 SARIF export. 279 tests passing.
 **Orientation: start with `00_PROJECT_MAP.md`** (document hierarchy, sprint roadmap, where we are, next steps).
 Full status: `03_Documentation/PROJECT_STATUS.md` · Sprint detail: `03_Documentation/SPRINT_LOG.md`
 
@@ -71,7 +71,7 @@ uv run pytest tests/ -q
 ```
 
 Key CLI parameters:
-- `aiscout scan` — `--repo`/`--local`/`--org` (source; multi-repo + YAML config supported), `--include-archived`/`--include-forks`/`--max-repos` (org filters), `--manifests-only`, `--llm-url`, `--llm-model`, `--llm-mode` (ollama|openai), `--llm-key`, `--no-llm`, `--output` (.html/.json auto-detect), `--branch`, `--token`, `--strict` (CI: exit non-zero when the report QA linter suppressed any sentence).
+- `aiscout scan` — `--repo`/`--local`/`--org` (source; multi-repo + YAML config supported), `--include-archived`/`--include-forks`/`--max-repos` (org filters), `--manifests-only`, `--llm-url`, `--llm-model`, `--llm-mode` (ollama|openai), `--llm-key`, `--no-llm`, `--output` (.html/.json auto-detect), `--branch`, `--token`, `--strict` (CI: exit non-zero when the report QA linter suppressed any sentence), `--sarif-include-discovery` (SARIF: also emit discovery findings as notes). Output auto-detects `.html` / `.json` / `.sarif`.
 - `aiscout check` — `--path` (default `.`), `--warn-only`. Rule-based, no network; exits 1 on hardcoded keys or sensitive data sent to an external LLM (local runtimes like Ollama exempt).
 - `aiscout web` — `--host`, `--port`.
 
@@ -121,7 +121,8 @@ AI_Scout/
 │   │   └── assets.py                   # Pydantic models
 │   ├── report/
 │   │   ├── html.py                     # HTML report generator (+ GitHub Coverage section)
-│   │   ├── json_export.py              # JSON export (schema 1.2.0: insights + qa)
+│   │   ├── json_export.py              # JSON export (schema 1.4.0: insights, qa, model_refs, provenance, role)
+│   │   ├── sarif_export.py             # SARIF 2.1.0 export (GitHub code scanning)
 │   │   ├── insights.py                 # Typed insight catalog I-01–I-10 (ICU templates)
 │   │   ├── linter.py                   # Report linter L-01–L-10 (QA layer)
 │   │   ├── qa.py                       # QA pipeline: invariants → render → lint → degrade

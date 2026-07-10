@@ -1,0 +1,41 @@
+# AI Scout → GitHub code scanning
+#
+# Scans the repository on every push/PR and uploads findings (hardcoded
+# AI API keys and other security-severity findings) to the Security tab.
+# Copy to .github/workflows/ai-scout-sarif.yml in your repository.
+#
+# Requires: GitHub code scanning available on the repository
+# (public repos: free; private repos: GitHub Advanced Security).
+
+name: AI Scout SARIF
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  schedule:
+    - cron: "0 6 * * 1"   # weekly Monday scan
+
+permissions:
+  contents: read
+  security-events: write   # required by upload-sarif
+
+jobs:
+  ai-scout:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: astral-sh/setup-uv@v5
+
+      - name: Run AI Scout (rule-based, no LLM, no network)
+        run: |
+          uvx --from git+https://github.com/tomasb01/AI_Scout aiscout \
+            scan --local . --no-llm --output aiscout.sarif
+
+      - name: Upload SARIF to code scanning
+        uses: github/codeql-action/upload-sarif@v3
+        with:
+          sarif_file: aiscout.sarif
+          category: ai-scout

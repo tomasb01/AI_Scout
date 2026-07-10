@@ -438,6 +438,27 @@ Rozhodnutí: malá příprava na AIBOM (Sprint 5b) provedena hned — teplý kon
 
 ---
 
+## Sprint 1 — SARIF export (10. července 2026, v0.12.0)
+
+Cíl: distribuce zadarmo — nálezy tam, kde žijí vývojáři (GitHub code scanning, CI security taby).
+
+### Co vzniklo
+
+- **`aiscout/report/sarif_export.py`** — SARIF 2.1.0 exporter, `--output *.sarif` autodetekce v CLI. Jeden `run` per repo (multi-repo scan nese `automationDetails.id`).
+- **Security tab dostává security nálezy**: default exportuje findingy severity ≥ medium (dnes `SEC-KEY-001` hardcoded klíče jako `error` + GitHub `security-severity: 9.1`). Discovery inventář (importy/deps/configy) jen s `--sarif-include-discovery` jako `note` — tutorial repo nevysype 400 poznámek do security tabu.
+- **Fingerprinty ze stabilních ID** (Sprint 0.1): `partialFingerprints.aiScoutFindingId/v1 = f-...` — alerty se mezi scany neduplikují. Zprávy nikdy neobsahují surový klíč (jen redakci) a jmenují řešení.
+- **Rules katalog** s lidskými popisy per rule_id (SEC-KEY-001 + 5× DISC-*), tagy, helpUri.
+- **Deterministický výstup** — bez timestampů, explicitní řazení; dva běhy = bitově shodný soubor.
+- **CI šablony**: `examples/ai-scout-sarif.yml` (GitHub Action s `codeql-action/upload-sarif`), `examples/ai-scout-gitlab-ci.yml` (SARIF artefakt + poznámka ke konverzi do GitLab SAST formátu — GitLab SARIF nativně neingestuje). README rozšířeno.
+
+### Validace
+
+- Výstup **validuje proti oficiálnímu SARIF 2.1.0 JSON schématu** (fixtures i AI-developer-3 — 10 výsledků = 10 uniklých HF klíčů s file:line).
+- 279 testů passing (+8: struktura/GitHub požadavky, redakce zpráv, fingerprinty, discovery flag, multi-repo, determinismus, CLI e2e).
+- Zbývá živé ověření v GitHub security tabu — nasadit workflow z examples (dogfood na AI_Scout repu) nebo na pilotním repu.
+
+---
+
 ## Otevřené body
 
 1. **Report redesign** — implementovat vybranou variantu (nebo mix) jako nový `report.html.j2`

@@ -52,12 +52,18 @@ aiscout scan --org acme --token ghp_xxx --manifests-only --output report.html
 # Machine-readable output (auto-detected from extension)
 aiscout scan --local /path/to/repo --no-llm --output report.json
 
+# SARIF 2.1.0 for GitHub code scanning / CI security tabs
+# (security findings only by default; add --sarif-include-discovery for inventory)
+aiscout scan --local . --no-llm --output aiscout.sarif
+
 # Developer guardrail for pre-commit / CI: fail on leaked keys or sensitive LLM egress
 aiscout check --path .
 
 # Web UI (3-step wizard)
 aiscout web --port 8080
 ```
+
+CI templates: `examples/ai-scout-sarif.yml` (GitHub code scanning upload), `examples/ai-scout-gitlab-ci.yml` (GitLab), `examples/ai-scout-guardrail.yml` (pre-commit/CI guardrail).
 
 ## YAML Config
 
@@ -97,13 +103,14 @@ output:
 | `--include-archived` / `--include-forks` | Widen `--org` scans | off |
 | `--max-repos` | Cap on repos per `--org` | `200` |
 | `--manifests-only` | Read only dependency manifests, never source | off |
-| `--output` / `-o` | Output path (`.html` or `.json`) | `aiscout_report.html` |
+| `--output` / `-o` | Output path (`.html`, `.json` or `.sarif`) | `aiscout_report.html` |
 | `--llm-url` | LLM API URL | `http://localhost:11434` |
 | `--llm-model` | LLM model name | `qwen2.5-coder:7b` |
 | `--llm-mode` | `ollama` or `openai` | `ollama` |
 | `--llm-key` | Bearer token for OpenAI mode | env `AISCOUT_LLM_KEY` |
 | `--no-llm` | Skip LLM classification | off |
 | `--strict` | CI mode: non-zero exit if the report QA linter suppressed anything | off |
+| `--sarif-include-discovery` | SARIF only: also emit discovery findings as notes | off |
 
 Other commands: `aiscout check --path . [--warn-only]` (guardrail), `aiscout web [--host] [--port]` (wizard UI).
 
@@ -117,7 +124,7 @@ Other commands: `aiscout check --path . [--warn-only]` (guardrail), `aiscout web
 
 **Data flows** — sources → processing → sinks per solution, rule-based, no LLM required. Plus MCP configs, CI/CD pipelines, Docker manifests, local model artifacts.
 
-**Repo character** — production / tutorial–example / experiment, so a course repo with 100 lesson folders reports as one teaching collection, not 100 AI solutions.
+**Repo character** — production / tutorial–example / experiment: teaching repos get a badge, provable same-flow variants merge into variant groups, and the report table folds large repos into collapsible per-directory groups — overview without losing granularity.
 
 ## Docker
 

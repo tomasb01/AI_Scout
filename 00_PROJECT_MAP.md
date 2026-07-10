@@ -3,7 +3,7 @@
 > Jeden dokument, který říká, co je kde, co je zdroj pravdy, co je hotové a co dělat dál.
 > Aktualizuj při merge každého sprintu.
 
-**Stav: v0.10.0 · větev `main` · 261 testů · dokončen Sprint 0.3 (agregační hranice + repo character + install) → Sprint 0 kompletní**
+**Stav: v0.12.0 · větev `main` · 279 testů · dokončen Sprint 1 (SARIF export); předtím purpose-first refactor identity (v0.11.0) + AIBOM groundwork (JSON schema 1.4.0)**
 
 ---
 
@@ -53,8 +53,9 @@ Detailní stav: `03_Documentation/PROJECT_STATUS.md` · pro AI asistenty: `CLAUD
 | 0.1 | Stabilní ID + risk status model | datamodel spec §1–§2 | ✅ **hotový** (v0.8.0) |
 | 0.2 | QA vrstva reportu (insighty, linter, fact strip) | QA spec | ✅ **hotový** (v0.9.0) |
 | 0.3 | Agregační hranice + detektor tutorial/produkce + install | QA spec + Spec v13 §3.4 | ✅ **hotový** (v0.10.0) |
-| → | Validační sken reálných rep (258 → 12 řešení; kalibrace detektoru) | validační milník z Vývojového plánu | ✅ hotový (viz SPRINT_LOG) |
-| **1** | **SARIF export** | Spec v13 §15 | ⏳ **← další na řadě** |
+| → | Validační milník: reálná repa + purpose-first refactor identity (v0.11.0) + AIBOM groundwork (schema 1.4.0) | feedback z validace | ✅ hotový (viz SPRINT_LOG) |
+| 1 | SARIF export | Spec v13 §15 | ✅ **hotový** (v0.12.0; zbývá živé ověření v GitHub security tabu) |
+| **2** | **Diff / trend režim** | datamodel spec (finding stavy) | ⏳ **← další na řadě** |
 | 1 | SARIF export | Spec v13 §15 | ⏳ (odemčeno — stabilní ID hotové) |
 | 2 | Diff / trend režim | datamodel spec (finding stavy) | ⏳ |
 | 3 | MCP & Agent scanner (launch feature) | Spec v13 §15 | ⏳ |

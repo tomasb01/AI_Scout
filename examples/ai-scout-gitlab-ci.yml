@@ -1,0 +1,39 @@
+# AI Scout → GitLab
+#
+# GitLab's security dashboard ingests its own SAST report format, not
+# SARIF directly. Two supported paths:
+#
+#   1. (shown below) keep the SARIF as a job artifact — viewable in
+#      MR widgets via tools that read SARIF, and consumable by GitLab's
+#      SARIF converters.
+#   2. Convert SARIF → GitLab SAST JSON with a converter image and
+#      declare it as `reports: sast:` — then findings appear in the
+#      Security tab / MR security widget.
+#
+# Copy the job into your .gitlab-ci.yml.
+
+ai-scout:
+  stage: test
+  image: ghcr.io/astral-sh/uv:python3.12-bookworm-slim
+  script:
+    - uvx --from git+https://github.com/tomasb01/AI_Scout aiscout
+      scan --local . --no-llm --output aiscout.sarif
+  artifacts:
+    paths:
+      - aiscout.sarif
+    when: always
+    expire_in: 30 days
+
+# Optional path 2 — convert to GitLab SAST format so findings land in
+# the Security tab (uses a community SARIF converter; pin the version
+# your security team approves):
+#
+# ai-scout-convert:
+#   stage: test
+#   needs: [ai-scout]
+#   image: alpine
+#   script:
+#     - ./sarif-converter --type sast aiscout.sarif gl-sast-report.json
+#   artifacts:
+#     reports:
+#       sast: gl-sast-report.json
