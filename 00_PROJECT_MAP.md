@@ -17,7 +17,7 @@ Dokumenty mají tři úrovně. Když si odporují, platí vyšší úroveň:
 | **2. OPERATIVA** | `01_Prod_specs/AI_Scout_Vyvojovy_plan.docx` | Companion ke Spec v13: rozpis sprintů — co přesně, v jakém pořadí, kritéria „hotovo když", odkazy na zadání. |
 | **3. IMPLEMENTAČNÍ ZADÁNÍ** | `01_Prod_specs/specs/*.md` | Detailní zadání pro konkrétní sprinty (viz §2). |
 
-Pomocné: `README_BUNDLE.md` (mapa balíčku podkladů + poznámka k AIAsset.id re-baseline) · `02_Architecture/` (technické popisy hotových komponent) · `03_Documentation/` (stav projektu, sprint log, access strategie).
+Pomocné: `README_BUNDLE.md` (mapa balíčku podkladů + poznámka k AIAsset.id re-baseline) · `02_Architecture/` (technické popisy hotových komponent) · `03_Documentation/` (stav projektu, sprint log, access strategie, **`THREAT_MODEL.md`** — publikovatelný threat model pro regulovaný segment).
 
 ## 2. Podkladové dokumenty → sprinty
 

@@ -190,6 +190,12 @@ aiscout/
     └── app.py              # FastAPI wizard UI
 ```
 
+## Security
+
+AI Scout is designed to be safe to point at an entire codebase: no phone-home, no default cloud sink, rule-based core that needs no LLM or network (`--no-llm` + `--local` runs fully offline), read-only (audit not enforcement), deterministic output. Git tokens go through a `GIT_ASKPASS` helper (never in URLs), symlinks and path traversal are blocked, repo URLs are SSRF-filtered, discovered API keys are redacted everywhere, and LLM prompts wrap untrusted repo content in `<untrusted>` tags.
+
+Full threat model: **[03_Documentation/THREAT_MODEL.md](03_Documentation/THREAT_MODEL.md)** — assets, trust boundaries, threats with mitigations mapped to source, and honest residual risks.
+
 ## License
 
 Business Source License 1.1 (BUSL-1.1)
